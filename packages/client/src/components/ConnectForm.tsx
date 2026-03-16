@@ -80,7 +80,8 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
     if (hostErr) errors.host = hostErr
     const portErr = validatePort(port)
     if (portErr) errors.port = portErr
-    if (!username.trim()) errors.username = 'Username is required.'
+    if (!/^[a-zA-Z0-9._-]{1,32}$/.test(username.trim()))
+      errors.username = 'Username must be 1–32 characters: letters, numbers, dash, underscore, dot.'
     if (authMode === 'key' && !privateKey.trim().startsWith('-----BEGIN')) {
       errors.auth = 'Key must be a PEM key starting with "-----BEGIN".'
     }

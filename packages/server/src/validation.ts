@@ -19,8 +19,16 @@ function isValidPort(port: unknown): port is number {
   return typeof port === 'number' && Number.isInteger(port) && port >= 1 && port <= 65535
 }
 
+// Alphanumeric, dash, underscore, dot — same set accepted by most Linux distros
+const USERNAME_RE = /^[a-zA-Z0-9._-]+$/
+
 function isValidUsername(username: unknown): username is string {
-  return typeof username === 'string' && username.trim().length > 0 && username.length <= 64
+  return (
+    typeof username === 'string' &&
+    username.length > 0 &&
+    username.length <= 32 &&
+    USERNAME_RE.test(username)
+  )
 }
 
 const MAX_PASSWORD_LEN = 1024        // 1 KB
@@ -49,7 +57,7 @@ export function validateConnectionConfig(payload: unknown): ValidationError[] {
   }
 
   if (!isValidUsername(p.username)) {
-    errors.push({ field: 'username', message: 'Username must be a non-empty string (max 64 chars).' })
+    errors.push({ field: 'username', message: 'Username must be 1–32 characters: letters, numbers, dash, underscore, dot.' })
   }
 
   const hasPassword = typeof p.password === 'string' && p.password.length > 0

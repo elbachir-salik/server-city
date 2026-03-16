@@ -117,15 +117,27 @@ describe('validateConnectionConfig', () => {
       expect(fieldsWithErrors(validateConnectionConfig({ ...validBase, username: '   ' }))).toContain('username')
     })
 
-    it('rejects a username longer than 64 characters', () => {
+    it('rejects a username longer than 32 characters', () => {
       expect(
-        fieldsWithErrors(validateConnectionConfig({ ...validBase, username: 'a'.repeat(65) })),
+        fieldsWithErrors(validateConnectionConfig({ ...validBase, username: 'a'.repeat(33) })),
       ).toContain('username')
     })
 
-    it('accepts a username of exactly 64 characters', () => {
+    it('accepts a username of exactly 32 characters', () => {
       expect(
-        fieldsWithErrors(validateConnectionConfig({ ...validBase, username: 'a'.repeat(64) })),
+        fieldsWithErrors(validateConnectionConfig({ ...validBase, username: 'a'.repeat(32) })),
+      ).not.toContain('username')
+    })
+
+    it('rejects a username with invalid characters', () => {
+      expect(
+        fieldsWithErrors(validateConnectionConfig({ ...validBase, username: 'root user' })),
+      ).toContain('username')
+    })
+
+    it('accepts username with dash, underscore, dot', () => {
+      expect(
+        fieldsWithErrors(validateConnectionConfig({ ...validBase, username: 'deploy_user.1-dev' })),
       ).not.toContain('username')
     })
   })
