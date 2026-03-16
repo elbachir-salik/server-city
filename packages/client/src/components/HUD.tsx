@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useServerStore } from '../store/useServerStore'
+import { useLerpedMetrics } from '../hooks/useLerpedMetrics'
 
 interface Props {
   onDisconnect: () => void
@@ -90,7 +91,8 @@ function MetricCard({ label, value, sub, percent, danger, warn }: MetricCardProp
 
 // ── Main HUD ─────────────────────────────────────────────────────────────────
 export function HUD({ onDisconnect }: Props) {
-  const { status, hostname, metrics, metricsStale } = useServerStore()
+  const { status, hostname, metrics: rawMetrics, metricsStale } = useServerStore()
+  const metrics = useLerpedMetrics(rawMetrics)
 
   const statusColor =
     status === 'connected'
