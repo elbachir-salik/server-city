@@ -31,6 +31,8 @@ export interface ConnectionConfig {
   username: string
   password?: string
   privateKey?: string
+  /** Passphrase to decrypt an encrypted private key. Used once in memory then discarded. */
+  passphrase?: string
   /** SHA-256 or MD5 hex fingerprint of the server's host key (e.g. "SHA256:abc123...").
    *  When provided the connection is rejected if the key doesn't match.
    *  When absent a warning is sent to the client. */

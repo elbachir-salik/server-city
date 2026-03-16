@@ -66,6 +66,7 @@ export class SSHSession {
         username: this.config.username,
         password: this.config.password,
         privateKey: this.config.privateKey,
+        passphrase: this.config.passphrase,
         readyTimeout: 10000,
         hostVerifier: (keyHash) => {
           const provided = this.config.hostFingerprint?.trim()

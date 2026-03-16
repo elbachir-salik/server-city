@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, FormEvent, useRef } from 'react'
 import { ConnectionConfig } from '@servercity/shared'
 
 interface Props {
@@ -37,6 +37,14 @@ function validatePort(p: string): string | undefined {
   return undefined
 }
 
+// ── Key encryption detection ─────────────────────────────────────────────────
+// Returns true = encrypted, false = plaintext, null = unknown (OpenSSH format)
+function detectKeyEncryption(pem: string): boolean | null {
+  if (pem.includes('Proc-Type: 4,ENCRYPTED')) return true
+  if (pem.match(/BEGIN (?:RSA|DSA|EC) PRIVATE KEY/)) return false // traditional PEM, no encryption header
+  return null // OpenSSH format — can't tell without binary parsing
+}
+
 // ── Reusable styled input ────────────────────────────────────────────────────
 interface FieldProps {
   label: string
@@ -66,8 +74,25 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [privateKey, setPrivateKey] = useState('')
+  const [passphrase, setPassphrase] = useState('')
   const [authMode, setAuthMode] = useState<'password' | 'key'>('password')
   const [hostFingerprint, setHostFingerprint] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const keyEncrypted = authMode === 'key' && privateKey.trim() ? detectKeyEncryption(privateKey) : null
+
+  const handleKeyFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result
+      if (typeof text === 'string') { setPrivateKey(text); revalidate() }
+    }
+    reader.readAsText(file)
+    // Reset so the same file can be re-selected if needed
+    e.target.value = ''
+  }
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [touched, setTouched] = useState<Partial<Record<keyof FieldErrors, boolean>>>({})
 
@@ -102,6 +127,7 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
       username: username.trim(),
       password: authMode === 'password' ? password : undefined,
       privateKey: authMode === 'key' ? privateKey : undefined,
+      passphrase: authMode === 'key' && passphrase ? passphrase : undefined,
       hostFingerprint: hostFingerprint.trim() || undefined,
     })
   }
@@ -169,7 +195,7 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
               <button
                 key={mode}
                 type="button"
-                onClick={() => { setAuthMode(mode); setFieldErrors({}); setTouched({}) }}
+                onClick={() => { setAuthMode(mode); setFieldErrors({}); setTouched({}); setPassphrase('') }}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                   authMode === mode
                     ? 'bg-city-accent border-city-accent text-white'
@@ -194,18 +220,43 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
               />
             </div>
           ) : (
-            <Field label="Private Key (PEM)" error={touched.auth ? fieldErrors.auth : undefined}>
-              <textarea
-                value={privateKey}
-                onChange={(e) => { setPrivateKey(e.target.value); revalidate() }}
-                onBlur={() => { touch('auth'); revalidate() }}
-                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..."
-                rows={5}
-                className={`w-full bg-black/40 border rounded-lg px-3 py-2 text-white text-xs font-mono placeholder-gray-600 focus:outline-none focus:border-city-accent resize-none ${
-                  touched.auth && fieldErrors.auth ? 'border-red-500/70' : 'border-gray-700'
-                }`}
-              />
-            </Field>
+            <>
+              <Field label="Private Key (PEM)" error={touched.auth ? fieldErrors.auth : undefined}>
+                <textarea
+                  value={privateKey}
+                  onChange={(e) => { setPrivateKey(e.target.value); revalidate() }}
+                  onBlur={() => { touch('auth'); revalidate() }}
+                  placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..."
+                  rows={5}
+                  className={`w-full bg-black/40 border rounded-lg px-3 py-2 text-white text-xs font-mono placeholder-gray-600 focus:outline-none focus:border-city-accent resize-none ${
+                    touched.auth && fieldErrors.auth ? 'border-red-500/70' : 'border-gray-700'
+                  }`}
+                />
+              </Field>
+
+              {/* Unencrypted key warning */}
+              {keyEncrypted === false && (
+                <div className="bg-amber-900/30 border border-amber-500/50 rounded-lg px-3 py-2 text-amber-400 text-xs">
+                  Your private key has no passphrase. Anyone who obtains this file can use it immediately. Consider protecting it with a passphrase.
+                </div>
+              )}
+
+              {/* Passphrase field — shown when key is present */}
+              {privateKey.trim() && (
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">
+                    Key Passphrase <span className="text-gray-600">(if encrypted)</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={passphrase}
+                    onChange={(e) => setPassphrase(e.target.value)}
+                    placeholder="Leave blank if key has no passphrase"
+                    className={inputCls()}
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {/* Optional host fingerprint */}
