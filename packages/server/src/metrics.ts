@@ -70,7 +70,7 @@ export function parseDisk(raw: string): ServerMetrics['disk'] {
       mount: parts[5],
       usedGb: parseSizeToGb(parts[2]),
       totalGb: parseSizeToGb(parts[1]),
-      usedPercent: parseInt(parts[4]) || 0,
+      usedPercent: parseInt(parts[4].replace('%', ''), 10) || 0,
     })
   }
 

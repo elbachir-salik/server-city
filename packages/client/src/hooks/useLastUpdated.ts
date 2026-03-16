@@ -6,13 +6,15 @@ export function useLastUpdated(metrics: ServerMetrics | null): number | null {
   const [secondsAgo, setSecondsAgo] = useState<number | null>(null)
   const timestampRef = useRef<number | null>(null)
 
-  // Update ref whenever a new metrics packet arrives
+  // Extract primitive so the effect dep is a number, not an object reference
+  const timestamp = metrics?.timestamp ?? null
+
   useEffect(() => {
-    if (metrics) {
-      timestampRef.current = metrics.timestamp
+    if (timestamp !== null) {
+      timestampRef.current = timestamp
       setSecondsAgo(0)
     }
-  }, [metrics?.timestamp])
+  }, [timestamp])
 
   useEffect(() => {
     const id = setInterval(() => {
