@@ -6,7 +6,8 @@ import { handleWSConnection } from './wsHandler'
 
 const app = express()
 const server = http.createServer(app)
-const wss = new WebSocketServer({ server, path: '/ws' })
+// 64 KB is far more than any valid client message needs
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 })
 
 // Track open WS connections so we can close them on shutdown
 const activeSessions = new Set<WebSocket>()
