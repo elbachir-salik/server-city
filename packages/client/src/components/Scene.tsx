@@ -4,6 +4,8 @@ import { ServerMetrics } from '@servercity/shared'
 import { Ground } from '../scene/Ground'
 import { Building } from '../scene/Building'
 import { IdleBuilding } from '../scene/IdleBuilding'
+import { CameraRig } from '../scene/CameraRig'
+import { SceneLights } from '../scene/SceneLights'
 
 interface SceneProps {
   metrics: ServerMetrics | null
@@ -11,12 +13,15 @@ interface SceneProps {
 }
 
 export function Scene({ metrics, connected }: SceneProps) {
+  const cpuPercent = metrics?.cpu.overall ?? 0
+  const memPercent = metrics?.memory.usedPercent ?? 0
+
   return (
-    <Canvas camera={{ position: [8, 7, 10], fov: 45 }} gl={{ antialias: true }} shadows>
+    <Canvas camera={{ position: [10, 9, 13], fov: 45 }} gl={{ antialias: true }} shadows>
       <color attach="background" args={['#0a0a0f']} />
-      <ambientLight intensity={0.3} />
-      <directionalLight position={[5, 10, 5]} intensity={0.6} castShadow />
-      <pointLight position={[0, 8, 0]} intensity={0.5} color="#6366f1" />
+
+      <SceneLights cpuPercent={cpuPercent} memPercent={memPercent} />
+      <CameraRig connected={connected} />
 
       <Ground />
 
