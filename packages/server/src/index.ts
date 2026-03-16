@@ -12,6 +12,11 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 })
 // Track open WS connections so we can close them on shutdown
 const activeSessions = new Set<WebSocket>()
 
+// ── Per-IP connection limit ────────────────────────────────────────────────
+// Prevents a single client from spawning unlimited SSH sessions.
+const MAX_CONNECTIONS_PER_IP = 5
+const ipConnectionCount = new Map<string, number>()
+
 // ── Origin check ───────────────────────────────────────────────────────────
 // Allowed origins: localhost variants + optional override via env var.
 // Prevents malicious web pages from silently connecting to the local backend.
@@ -43,12 +48,23 @@ wss.on('connection', (ws: WebSocket, req) => {
     return
   }
 
-  const ip = req.socket.remoteAddress
+  const ip = req.socket.remoteAddress ?? 'unknown'
+  const count = ipConnectionCount.get(ip) ?? 0
+  if (count >= MAX_CONNECTIONS_PER_IP) {
+    console.warn(`[ws] too many connections from ${ip} (${count}) — rejecting`)
+    ws.close(1008, 'Too many connections from your IP')
+    return
+  }
+  ipConnectionCount.set(ip, count + 1)
+
   console.log(`[ws] client connected from ${ip}`)
   activeSessions.add(ws)
   handleWSConnection(ws)
   ws.on('close', () => {
     activeSessions.delete(ws)
+    const remaining = (ipConnectionCount.get(ip) ?? 1) - 1
+    if (remaining <= 0) ipConnectionCount.delete(ip)
+    else ipConnectionCount.set(ip, remaining)
     console.log(`[ws] client disconnected from ${ip}`)
   })
 })
