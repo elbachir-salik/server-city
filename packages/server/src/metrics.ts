@@ -1,14 +1,27 @@
 import { ServerMetrics } from '@servercity/shared'
 
+// ── CPU ───────────────────────────────────────────────────────────────────────
 export function parseCPU(raw: string): { overall: number; cores: number[] } {
-  // top -bn1 | grep "Cpu(s)" →
-  // %Cpu(s):  5.0 us,  2.0 sy,  0.0 ni, 92.0 id,  0.0 wa ...
-  const match = raw.match(/(\d+\.?\d*)\s*id/)
-  const idle = match ? parseFloat(match[1]) : 0
-  const overall = Math.max(0, Math.min(100, 100 - idle))
+  // Modern top (most Linux distros):
+  //   %Cpu(s):  5.0 us,  2.0 sy,  0.0 ni, 92.0 id, ...
+  // Older top format:
+  //   Cpu(s): 5.0%us,  2.0%sy, ... 92.0%id, ...
+  let idle = 0
+
+  const modernMatch = raw.match(/(\d+\.?\d*)\s*id/)
+  if (modernMatch) {
+    idle = parseFloat(modernMatch[1])
+  } else {
+    // Older format: look for number immediately before %id or id,
+    const legacyMatch = raw.match(/(\d+\.?\d*)%?\s*id/)
+    if (legacyMatch) idle = parseFloat(legacyMatch[1])
+  }
+
+  const overall = isNaN(idle) ? 0 : Math.max(0, Math.min(100, 100 - idle))
   return { overall, cores: [] }
 }
 
+// ── Memory ────────────────────────────────────────────────────────────────────
 export function parseMemory(raw: string): {
   usedMb: number
   totalMb: number
@@ -23,34 +36,50 @@ export function parseMemory(raw: string): {
   const memLine = lines.find((l) => l.startsWith('Mem:'))
   const swapLine = lines.find((l) => l.startsWith('Swap:'))
 
-  let usedMb = 0,
-    totalMb = 0,
-    swapUsed = 0,
-    swapTotal = 0
+  let usedMb = 0, totalMb = 0, swapUsed = 0, swapTotal = 0
 
   if (memLine) {
     const parts = memLine.trim().split(/\s+/)
-    totalMb = parseInt(parts[1]) || 0
-    usedMb = parseInt(parts[2]) || 0
+    if (parts.length >= 3) {
+      const t = parseInt(parts[1], 10)
+      const u = parseInt(parts[2], 10)
+      // Guard against NaN — keep zeros rather than corrupt state
+      if (!isNaN(t) && t > 0) totalMb = t
+      if (!isNaN(u) && u >= 0) usedMb = u
+    }
   }
 
   if (swapLine) {
     const parts = swapLine.trim().split(/\s+/)
-    swapTotal = parseInt(parts[1]) || 0
-    swapUsed = parseInt(parts[2]) || 0
+    if (parts.length >= 3) {
+      const t = parseInt(parts[1], 10)
+      const u = parseInt(parts[2], 10)
+      if (!isNaN(t) && t >= 0) swapTotal = t
+      if (!isNaN(u) && u >= 0) swapUsed = u
+    }
   }
 
-  const usedPercent = totalMb > 0 ? (usedMb / totalMb) * 100 : 0
+  const usedPercent = totalMb > 0 ? Math.min(100, (usedMb / totalMb) * 100) : 0
   return { usedMb, totalMb, usedPercent, swap: { usedMb: swapUsed, totalMb: swapTotal } }
 }
 
+// ── Disk ──────────────────────────────────────────────────────────────────────
+// Pseudo/virtual filesystems that produce noise in the disk view
+const VIRTUAL_FS = new Set([
+  'tmpfs', 'devtmpfs', 'sysfs', 'proc', 'devpts', 'cgroup', 'cgroup2',
+  'overlay', 'nsfs', 'hugetlbfs', 'mqueue', 'pstore', 'securityfs',
+  'configfs', 'binfmt_misc', 'fusectl', 'debugfs', 'tracefs',
+])
+
 function parseSizeToGb(s: string): number {
   const num = parseFloat(s)
-  if (isNaN(num)) return 0
-  if (s.endsWith('T')) return num * 1024
-  if (s.endsWith('G')) return num
-  if (s.endsWith('M')) return num / 1024
-  if (s.endsWith('K')) return num / (1024 * 1024)
+  if (isNaN(num) || num < 0) return 0
+  const unit = s.slice(-1).toUpperCase()
+  if (unit === 'T') return num * 1024
+  if (unit === 'G') return num
+  if (unit === 'M') return num / 1024
+  if (unit === 'K') return num / (1024 * 1024)
+  // No unit suffix — treat as bytes
   return num / (1024 * 1024 * 1024)
 }
 
@@ -58,7 +87,7 @@ export function parseDisk(raw: string): ServerMetrics['disk'] {
   // df -h:
   // Filesystem  Size  Used Avail Use% Mounted on
   // /dev/sda1    50G   20G   30G  40% /
-  const lines = raw.split('\n').slice(1)
+  const lines = raw.split('\n').slice(1) // drop header
   const result: ServerMetrics['disk'] = []
 
   for (const line of lines) {
@@ -66,22 +95,38 @@ export function parseDisk(raw: string): ServerMetrics['disk'] {
     const parts = line.trim().split(/\s+/)
     if (parts.length < 6) continue
 
+    const filesystem = parts[0]
+    const mount = parts[5]
+
+    // Skip virtual/pseudo filesystems
+    if (VIRTUAL_FS.has(filesystem)) continue
+    // Skip mounts that look like kernel/system paths (optional – comment out if you want them)
+    if (mount.startsWith('/sys') || mount.startsWith('/proc') || mount.startsWith('/dev/pts')) continue
+
+    const totalGb = parseSizeToGb(parts[1])
+    const usedGb = parseSizeToGb(parts[2])
+    // Use% field — strip trailing % before parsing (Fix from code review)
+    const usedPercent = parseInt(parts[4].replace('%', ''), 10)
+
+    // Skip entries where size is 0 or percent is not a valid number
+    if (totalGb <= 0 || isNaN(usedPercent)) continue
+
     result.push({
-      mount: parts[5],
-      usedGb: parseSizeToGb(parts[2]),
-      totalGb: parseSizeToGb(parts[1]),
-      usedPercent: parseInt(parts[4].replace('%', ''), 10) || 0,
+      mount,
+      usedGb: Math.min(usedGb, totalGb), // can't use more than total
+      totalGb,
+      usedPercent: Math.max(0, Math.min(100, usedPercent)),
     })
   }
 
   return result
 }
 
+// ── Network ───────────────────────────────────────────────────────────────────
 export function parseNetwork(raw: string): { bytesIn: number; bytesOut: number } {
   // /proc/net/dev — skip 2 header lines, skip loopback
   const lines = raw.split('\n').slice(2)
-  let bytesIn = 0,
-    bytesOut = 0
+  let bytesIn = 0, bytesOut = 0
 
   for (const line of lines) {
     if (!line.trim()) continue
@@ -90,13 +135,18 @@ export function parseNetwork(raw: string): { bytesIn: number; bytesOut: number }
     const iface = line.substring(0, colonIdx).trim()
     if (iface === 'lo') continue
     const parts = line.substring(colonIdx + 1).trim().split(/\s+/)
-    bytesIn += parseInt(parts[0]) || 0
-    bytesOut += parseInt(parts[8]) || 0
+    // Need at least 9 fields (bytes_in is [0], bytes_out is [8])
+    if (parts.length < 9) continue
+    const bIn = parseInt(parts[0], 10)
+    const bOut = parseInt(parts[8], 10)
+    if (!isNaN(bIn) && bIn >= 0) bytesIn += bIn
+    if (!isNaN(bOut) && bOut >= 0) bytesOut += bOut
   }
 
   return { bytesIn, bytesOut }
 }
 
+// ── Builder ───────────────────────────────────────────────────────────────────
 export function buildMetrics(
   cpuRaw: string,
   memRaw: string,
@@ -111,11 +161,7 @@ export function buildMetrics(
   return {
     timestamp: Date.now(),
     cpu,
-    memory: {
-      usedMb: mem.usedMb,
-      totalMb: mem.totalMb,
-      usedPercent: mem.usedPercent,
-    },
+    memory: { usedMb: mem.usedMb, totalMb: mem.totalMb, usedPercent: mem.usedPercent },
     swap: mem.swap,
     disk,
     network,

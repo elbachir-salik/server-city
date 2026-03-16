@@ -37,6 +37,15 @@ export class SSHSession {
     this.client
       .on('ready', () => {
         this.alive = true
+        // Check OS before starting — metric commands require Linux
+        this.execCommand('uname -s', (err, out) => {
+          const os = out.trim()
+          if (!err && os !== 'Linux') {
+            this.onError(
+              `Warning: target OS is "${os}", not Linux — metric commands (top, free, df, /proc/net/dev) may not work correctly.`,
+            )
+          }
+        })
         this.execCommand('hostname', (err, out) => {
           if (!err) this.onConnected(out.trim())
         })
