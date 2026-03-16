@@ -5,6 +5,7 @@ import { friendlySSHError } from './errorMessages'
 
 const POLL_INTERVAL = 2000
 const SEP = '---SEP---'
+const MAX_OUTPUT_BYTES = 512 * 1024  // 512 KB — protects against rogue remote output
 
 // Runs all 4 metric commands in one exec, separated by a sentinel string
 const METRICS_CMD = [
@@ -73,13 +74,26 @@ export class SSHSession {
     this.client.exec(cmd, (err, stream) => {
       if (err) return cb(err, '')
       let output = ''
-      stream.on('data', (chunk: Buffer) => {
+      let byteCount = 0
+      let overflow = false
+
+      const onData = (chunk: Buffer) => {
+        if (overflow) return
+        byteCount += chunk.byteLength
+        if (byteCount > MAX_OUTPUT_BYTES) {
+          overflow = true
+          stream.destroy()
+          cb(new Error(`Command output exceeded ${MAX_OUTPUT_BYTES} bytes`), '')
+          return
+        }
         output += chunk.toString()
+      }
+
+      stream.on('data', onData)
+      stream.stderr.on('data', onData)
+      stream.on('close', () => {
+        if (!overflow) cb(null, output)
       })
-      stream.stderr.on('data', (chunk: Buffer) => {
-        output += chunk.toString()
-      })
-      stream.on('close', () => cb(null, output))
     })
   }
 
