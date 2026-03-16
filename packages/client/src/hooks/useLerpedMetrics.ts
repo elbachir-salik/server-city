@@ -6,8 +6,10 @@ import { ServerMetrics } from '@servercity/shared'
 // never jump — they slide.
 
 const LERP = 0.12 // per frame, ~60fps → ~1s to close most of the gap
+const SNAP = 0.05 // snap to target when this close — prevents infinite micro-jitter
 
 function lerpNum(a: number, b: number): number {
+  if (Math.abs(b - a) < SNAP) return b   // close enough — snap and stop updating
   return a + (b - a) * LERP
 }
 

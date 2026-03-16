@@ -14,7 +14,7 @@ services:
       context: .
       dockerfile: packages/client/Dockerfile
     ports:
-      - "80:80"
+      - "8080:80"   # Use 8080 on host to avoid port 80 conflict (IIS, Hyper-V, etc.)
     depends_on:
       - server
     restart: unless-stopped
