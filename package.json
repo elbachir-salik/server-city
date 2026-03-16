@@ -1,0 +1,17 @@
+{
+  "name": "servercity",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w @servercity/server\" \"npm run dev -w @servercity/client\"",
+    "build": "npm run build -w @servercity/shared && npm run build -w @servercity/server && npm run build -w @servercity/client",
+    "lint": "npm run lint -w @servercity/client -w @servercity/server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.5"
+  }
+}
