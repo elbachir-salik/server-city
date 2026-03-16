@@ -3,10 +3,8 @@
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "node",
-    "outDir": "./dist",
-    "paths": {
-      "@servercity/shared": ["../shared/src/types/index.ts"]
-    }
+    "rootDir": "./src",
+    "outDir": "./dist"
   },
-  "include": ["src", "src/__tests__"]
+  "include": ["src"]
 }
