@@ -70,6 +70,60 @@ Credentials are sent directly from your browser to the local backend over WebSoc
 
 > **Security note:** The backend makes an outbound SSH connection from the machine running Node.js — it must have network access to the target server. Do not expose the backend port publicly.
 
+## Docker
+
+The easiest way to run ServerCity in production. Two containers are created:
+
+- **server** — Node.js backend (internal only, not exposed to the host)
+- **client** — nginx serving the built React app on port 80, with `/ws` proxied to the server container
+
+### Prerequisites
+
+Docker 24+ and Docker Compose v2 (`docker compose` command, not `docker-compose`).
+
+### 1. Create `.env`
+
+```bash
+cp .env.example .env
+```
+
+`VITE_WS_URL` must **not** be set — nginx handles the proxy internally.
+
+### 2. Build and start
+
+```bash
+docker compose up --build
+```
+
+Open `http://localhost` in your browser.
+
+### 3. Stop
+
+```bash
+docker compose down
+```
+
+### Architecture
+
+```
+Browser → :80 (nginx / client container)
+              ├── static files  →  /usr/share/nginx/html
+              └── /ws           →  server:3001 (internal network)
+                                       └── SSH → your Linux server
+```
+
+The backend port (3001) is **never published** to the host — all WebSocket traffic flows through nginx on the internal `servercity` bridge network.
+
+### Rebuild after code changes
+
+```bash
+docker compose up --build
+```
+
+Docker caches the `npm ci` layer separately from source files, so rebuilds are fast unless `package-lock.json` changes.
+
+---
+
 ## Running tests
 
 ```bash
@@ -142,6 +196,8 @@ servercity/
 │           ├── scene/            # 3D objects (Building, WaterFill, …)
 │           ├── hooks/            # useWebSocket, useLerpedMetrics, useLastUpdated
 │           └── store/            # Zustand store
+├── docker-compose.yml
+├── .dockerignore
 ├── .env.example
 └── tsconfig.base.json
 ```
