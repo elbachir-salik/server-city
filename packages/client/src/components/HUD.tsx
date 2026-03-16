@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useServerStore } from '../store/useServerStore'
 import { useLerpedMetrics } from '../hooks/useLerpedMetrics'
+import { useLastUpdated } from '../hooks/useLastUpdated'
 
 interface Props {
   onDisconnect: () => void
@@ -94,6 +95,7 @@ function MetricCard({ label, value, sub, percent, danger, warn }: MetricCardProp
 export function HUD({ onDisconnect, onReconnect }: Props) {
   const { status, hostname, metrics: rawMetrics, metricsStale, retryAttempt, retryCountdown } = useServerStore()
   const metrics = useLerpedMetrics(rawMetrics)
+  const secondsAgo = useLastUpdated(rawMetrics)
 
   const statusColor =
     status === 'connected'
@@ -126,8 +128,10 @@ export function HUD({ onDisconnect, onReconnect }: Props) {
       <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-city-panel border border-city-border rounded-xl px-4 py-2.5 backdrop-blur">
         <span className={`w-2 h-2 rounded-full ${statusColor} animate-pulse`} />
         <span className="text-white font-semibold text-sm">{hostname || 'ServerCity'}</span>
-        {metricsStale && (
-          <span className="text-yellow-400 text-xs ml-2 animate-pulse">[stale]</span>
+        {secondsAgo !== null && status === 'connected' && (
+          <span className={`text-xs ml-2 tabular-nums ${metricsStale ? 'text-red-400 animate-pulse' : secondsAgo > 4 ? 'text-yellow-400' : 'text-gray-500'}`}>
+            {metricsStale ? `stale · ${secondsAgo}s ago` : `${secondsAgo}s ago`}
+          </span>
         )}
       </div>
 
