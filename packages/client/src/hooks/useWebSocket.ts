@@ -2,7 +2,9 @@ import { useEffect, useRef, useCallback } from 'react'
 import { WSMessage, WSClientMessage, ConnectionConfig } from '@servercity/shared'
 import { useServerStore } from '../store/useServerStore'
 
-const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
+const WS_URL =
+  import.meta.env.VITE_WS_URL ??
+  `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
 
 const MAX_RETRIES = 3
 const RETRY_BASE_MS = 1500 // 1.5s, 3s, 6s

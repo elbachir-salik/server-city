@@ -7,6 +7,7 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "rootDir": "..",
+    "types": ["vite/client"],
     "paths": {
       "@servercity/shared": ["../shared/src/types/index.ts"]
     }
