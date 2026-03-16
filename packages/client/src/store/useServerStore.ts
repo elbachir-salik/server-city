@@ -3,13 +3,16 @@ import { ServerMetrics, ConnectionConfig } from '@servercity/shared'
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error'
 
+// Credential-free snapshot — password and privateKey are never stored in state
+export type SafeConfig = Pick<ConnectionConfig, 'host' | 'port' | 'username'>
+
 interface ServerStore {
   status: ConnectionStatus
   hostname: string
   metrics: ServerMetrics | null
   metricsStale: boolean
   errorMessage: string
-  lastConfig: ConnectionConfig | null
+  lastConfig: SafeConfig | null
   retryAttempt: number       // 0 = not retrying
   retryCountdown: number     // seconds until next retry
 
@@ -38,7 +41,7 @@ export const useServerStore = create<ServerStore>((set) => ({
   setMetrics: (metrics) => set({ metrics, metricsStale: false }),
   setMetricsStale: (metricsStale) => set({ metricsStale }),
   setError: (errorMessage) => set({ errorMessage, status: 'error' }),
-  setLastConfig: (lastConfig) => set({ lastConfig }),
+  setLastConfig: ({ host, port, username }) => set({ lastConfig: { host, port, username } }),
   setRetry: (retryAttempt, retryCountdown) => set({ retryAttempt, retryCountdown }),
   reset: () =>
     set({
