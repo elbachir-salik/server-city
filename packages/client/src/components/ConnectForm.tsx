@@ -67,6 +67,7 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
   const [password, setPassword] = useState('')
   const [privateKey, setPrivateKey] = useState('')
   const [authMode, setAuthMode] = useState<'password' | 'key'>('password')
+  const [hostFingerprint, setHostFingerprint] = useState('')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [touched, setTouched] = useState<Partial<Record<keyof FieldErrors, boolean>>>({})
 
@@ -100,6 +101,7 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
       username: username.trim(),
       password: authMode === 'password' ? password : undefined,
       privateKey: authMode === 'key' ? privateKey : undefined,
+      hostFingerprint: hostFingerprint.trim() || undefined,
     })
   }
 
@@ -204,6 +206,23 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
               />
             </Field>
           )}
+
+          {/* Optional host fingerprint */}
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              Host Fingerprint <span className="text-gray-600">(optional — recommended)</span>
+            </label>
+            <input
+              type="text"
+              value={hostFingerprint}
+              onChange={(e) => setHostFingerprint(e.target.value)}
+              placeholder="SHA256:abc123..."
+              className={inputCls()}
+            />
+            <p className="text-gray-600 text-xs mt-1">
+              Paste the server&apos;s host key fingerprint to prevent MITM attacks. Leave blank to connect without verification.
+            </p>
+          </div>
 
           {/* Server-side error */}
           {error && (

@@ -67,6 +67,24 @@ export class SSHSession {
         password: this.config.password,
         privateKey: this.config.privateKey,
         readyTimeout: 10000,
+        hostVerifier: (keyHash) => {
+          const provided = this.config.hostFingerprint?.trim()
+          if (!provided) {
+            // No fingerprint supplied — warn but allow (opt-in verification)
+            this.onError(
+              'Warning: no host fingerprint provided — the server\'s identity has not been verified (MITM risk).',
+            )
+            return true
+          }
+          // Normalise both sides to lowercase for comparison
+          const match = keyHash.toLowerCase() === provided.toLowerCase()
+          if (!match) {
+            this.onError(
+              `Host key fingerprint mismatch — expected "${provided}" but got "${keyHash}". Connection blocked.`,
+            )
+          }
+          return match
+        },
       })
   }
 

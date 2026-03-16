@@ -31,6 +31,10 @@ export interface ConnectionConfig {
   username: string
   password?: string
   privateKey?: string
+  /** SHA-256 or MD5 hex fingerprint of the server's host key (e.g. "SHA256:abc123...").
+   *  When provided the connection is rejected if the key doesn't match.
+   *  When absent a warning is sent to the client. */
+  hostFingerprint?: string
 }
 
 export type WSMessage =
