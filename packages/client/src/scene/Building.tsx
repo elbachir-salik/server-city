@@ -8,6 +8,7 @@ import { WaterFill } from './WaterFill'
 import { DiskFloor } from './DiskFloor'
 import { NetworkBeams } from './NetworkBeams'
 import { BaseRing } from './BaseRing'
+import { CPUCorona } from './CPUCorona'
 
 export interface BuildingProps {
   metrics: ServerMetrics
@@ -67,8 +68,9 @@ export function Building({ metrics, connected }: BuildingProps) {
 
   return (
     <>
-      {/* Ground ring sits outside the building group so it isn't y-scaled */}
+      {/* Ground ring + CPU corona sit outside the group so they aren't y-scaled */}
       <BaseRing riseProgress={spring.current.pos} />
+      <CPUCorona cpuPercent={metrics.cpu.overall} />
 
       <group ref={groupRef}>
         {/* Shell */}
