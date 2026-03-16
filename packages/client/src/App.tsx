@@ -3,11 +3,12 @@ import { useWebSocket } from './hooks/useWebSocket'
 import { ConnectForm } from './components/ConnectForm'
 import { Scene } from './components/Scene'
 import { HUD } from './components/HUD'
+import { FingerprintModal } from './components/FingerprintModal'
 import { ConnectionConfig } from '@servercity/shared'
 
 export default function App() {
-  const { status, metrics, errorMessage, reset } = useServerStore()
-  const { connect, reconnect, disconnect } = useWebSocket()
+  const { status, metrics, errorMessage, reset, fingerprintChallenge } = useServerStore()
+  const { connect, reconnect, disconnect, sendFingerprintResponse } = useWebSocket()
 
   const isConnected = status === 'connected'
   const isConnecting = status === 'connecting'
@@ -22,6 +23,14 @@ export default function App() {
 
   return (
     <div className="w-full h-full relative">
+      {/* TOFU fingerprint modal — blocks SSH handshake until user decides */}
+      {fingerprintChallenge && (
+        <FingerprintModal
+          challenge={fingerprintChallenge}
+          onApprove={() => sendFingerprintResponse(true)}
+          onReject={() => sendFingerprintResponse(false)}
+        />
+      )}
       {/* 3D scene — mounts as soon as connecting starts */}
       <div
         className="absolute inset-0 transition-opacity duration-700"

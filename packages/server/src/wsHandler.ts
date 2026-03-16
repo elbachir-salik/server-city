@@ -7,6 +7,9 @@ import { validateConnectionConfig, validateWSClientMessage } from './validation'
 const RATE_LIMIT_MAX = 3
 const RATE_LIMIT_WINDOW_MS = 10_000
 
+// How long (ms) to wait for the client to respond to a fingerprint challenge
+const FINGERPRINT_TIMEOUT_MS = 30_000
+
 export function handleWSConnection(ws: WebSocket) {
   let session: SSHSession | null = null
 
@@ -14,9 +17,18 @@ export function handleWSConnection(ws: WebSocket) {
   let connectCount = 0
   let rateLimitTimer: ReturnType<typeof setTimeout> | null = null
 
+  // Pending fingerprint challenge — at most one at a time per socket
+  let pendingFingerprintCb: ((approved: boolean) => void) | null = null
+  let fingerprintTimeoutTimer: ReturnType<typeof setTimeout> | null = null
+
   function resetRateLimit() {
     connectCount = 0
     rateLimitTimer = null
+  }
+
+  function clearFingerprintPending() {
+    if (fingerprintTimeoutTimer) { clearTimeout(fingerprintTimeoutTimer); fingerprintTimeoutTimer = null }
+    pendingFingerprintCb = null
   }
 
   const send = (msg: WSMessage) => {
@@ -70,6 +82,22 @@ export function handleWSConnection(ws: WebSocket) {
         (hostname) => send({ type: 'connected', payload: { hostname } }),
         (message) => send({ type: 'error', payload: { message } }),
         () => send({ type: 'disconnected' }),
+        // TOFU fingerprint challenge — pause SSH handshake until client responds
+        (fingerprint, cb) => {
+          clearFingerprintPending()
+          pendingFingerprintCb = cb
+          send({
+            type: 'fingerprint_challenge',
+            payload: { fingerprint, host: msg.payload.host, port: msg.payload.port },
+          })
+          // Auto-reject if client doesn't respond within timeout
+          fingerprintTimeoutTimer = setTimeout(() => {
+            if (pendingFingerprintCb) {
+              pendingFingerprintCb(false)
+              clearFingerprintPending()
+            }
+          }, FINGERPRINT_TIMEOUT_MS)
+        },
       )
 
       session.connect()
@@ -79,11 +107,20 @@ export function handleWSConnection(ws: WebSocket) {
       session?.disconnect()
       session = null
     }
+
+    if (msg.type === 'fingerprint_response') {
+      if (pendingFingerprintCb) {
+        const approved = msg.payload.approved
+        pendingFingerprintCb(approved)
+        clearFingerprintPending()
+      }
+    }
   })
 
   ws.on('close', () => {
     session?.disconnect()
     session = null
+    clearFingerprintPending()
     if (rateLimitTimer) {
       clearTimeout(rateLimitTimer)
       rateLimitTimer = null

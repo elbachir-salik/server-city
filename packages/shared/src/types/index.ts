@@ -33,9 +33,8 @@ export interface ConnectionConfig {
   privateKey?: string
   /** Passphrase to decrypt an encrypted private key. Used once in memory then discarded. */
   passphrase?: string
-  /** SHA-256 or MD5 hex fingerprint of the server's host key (e.g. "SHA256:abc123...").
-   *  When provided the connection is rejected if the key doesn't match.
-   *  When absent a warning is sent to the client. */
+  /** Optional: pre-known host fingerprint for headless/scripted use.
+   *  Interactive users rely on the TOFU modal instead. */
   hostFingerprint?: string
 }
 
@@ -44,7 +43,9 @@ export type WSMessage =
   | { type: 'connected'; payload: { hostname: string } }
   | { type: 'error'; payload: { message: string } }
   | { type: 'disconnected' }
+  | { type: 'fingerprint_challenge'; payload: { fingerprint: string; host: string; port: number } }
 
 export type WSClientMessage =
   | { type: 'connect'; payload: ConnectionConfig }
   | { type: 'disconnect' }
+  | { type: 'fingerprint_response'; payload: { approved: boolean } }

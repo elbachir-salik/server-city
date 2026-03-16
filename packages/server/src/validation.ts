@@ -91,5 +91,5 @@ export function validateConnectionConfig(payload: unknown): ValidationError[] {
 export function validateWSClientMessage(raw: unknown): raw is WSClientMessage {
   if (typeof raw !== 'object' || raw === null) return false
   const msg = raw as Record<string, unknown>
-  return msg.type === 'connect' || msg.type === 'disconnect'
+  return msg.type === 'connect' || msg.type === 'disconnect' || msg.type === 'fingerprint_response'
 }

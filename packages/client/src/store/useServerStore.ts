@@ -6,6 +6,12 @@ export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecti
 // Credential-free snapshot — password and privateKey are never stored in state
 export type SafeConfig = Pick<ConnectionConfig, 'host' | 'port' | 'username'>
 
+export interface FingerprintChallenge {
+  fingerprint: string
+  host: string
+  port: number
+}
+
 interface ServerStore {
   status: ConnectionStatus
   hostname: string
@@ -15,6 +21,7 @@ interface ServerStore {
   lastConfig: SafeConfig | null
   retryAttempt: number       // 0 = not retrying
   retryCountdown: number     // seconds until next retry
+  fingerprintChallenge: FingerprintChallenge | null
 
   setStatus: (s: ConnectionStatus) => void
   setHostname: (h: string) => void
@@ -23,6 +30,7 @@ interface ServerStore {
   setError: (msg: string) => void
   setLastConfig: (c: ConnectionConfig) => void
   setRetry: (attempt: number, countdown: number) => void
+  setFingerprintChallenge: (c: FingerprintChallenge | null) => void
   reset: () => void
 }
 
@@ -35,6 +43,7 @@ export const useServerStore = create<ServerStore>((set) => ({
   lastConfig: null,
   retryAttempt: 0,
   retryCountdown: 0,
+  fingerprintChallenge: null,
 
   setStatus: (status) => set({ status }),
   setHostname: (hostname) => set({ hostname }),
@@ -43,6 +52,7 @@ export const useServerStore = create<ServerStore>((set) => ({
   setError: (errorMessage) => set({ errorMessage, status: 'error' }),
   setLastConfig: ({ host, port, username }) => set({ lastConfig: { host, port, username } }),
   setRetry: (retryAttempt, retryCountdown) => set({ retryAttempt, retryCountdown }),
+  setFingerprintChallenge: (fingerprintChallenge) => set({ fingerprintChallenge }),
   reset: () =>
     set({
       status: 'idle',
@@ -52,7 +62,7 @@ export const useServerStore = create<ServerStore>((set) => ({
       errorMessage: '',
       retryAttempt: 0,
       retryCountdown: 0,
-      // intentionally keep lastConfig so "Back to Connect" pre-fills nothing
-      // but reconnect can still work if user navigates back manually
+      fingerprintChallenge: null,
+      // intentionally keep lastConfig so reconnect can still work
     }),
 }))

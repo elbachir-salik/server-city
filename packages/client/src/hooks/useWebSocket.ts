@@ -21,7 +21,7 @@ export function useWebSocket() {
 
   const {
     setStatus, setHostname, setMetrics, setMetricsStale,
-    setError, setLastConfig, setRetry,
+    setError, setLastConfig, setRetry, setFingerprintChallenge,
   } = useServerStore()
 
   const clearTimers = useCallback(() => {
@@ -65,6 +65,8 @@ export function useWebSocket() {
       } else if (msg.type === 'disconnected') {
         setStatus('disconnected')
         clearTimers()
+      } else if (msg.type === 'fingerprint_challenge') {
+        setFingerprintChallenge(msg.payload)
       }
     }
 
@@ -114,7 +116,7 @@ export function useWebSocket() {
         }, delayMs)
       }
     }
-  }, [setStatus, setHostname, setMetrics, setMetricsStale, setError, setRetry, resetStaleTimer, clearTimers])
+  }, [setStatus, setHostname, setMetrics, setMetricsStale, setError, setRetry, resetStaleTimer, clearTimers, setFingerprintChallenge])
 
   const connect = useCallback((config: ConnectionConfig) => {
     intentionalRef.current = false
@@ -148,7 +150,15 @@ export function useWebSocket() {
     wsRef.current = null
   }, [clearTimers])
 
+  const sendFingerprintResponse = useCallback((approved: boolean) => {
+    setFingerprintChallenge(null)
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg: WSClientMessage = { type: 'fingerprint_response', payload: { approved } }
+      wsRef.current.send(JSON.stringify(msg))
+    }
+  }, [setFingerprintChallenge])
+
   useEffect(() => () => disconnect(), [disconnect])
 
-  return { connect, reconnect, disconnect }
+  return { connect, reconnect, disconnect, sendFingerprintResponse }
 }

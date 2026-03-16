@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { Client } from 'ssh2'
 import { ConnectionConfig, ServerMetrics } from '@servercity/shared'
 import { buildMetrics } from './metrics'
@@ -30,6 +31,7 @@ export class SSHSession {
     private onConnected: (hostname: string) => void,
     private onError: (msg: string) => void,
     private onDisconnect: () => void,
+    private onFingerprintChallenge: (fingerprint: string, cb: (approved: boolean) => void) => void,
   ) {
     this.client = new Client()
   }
@@ -68,23 +70,23 @@ export class SSHSession {
         privateKey: this.config.privateKey,
         passphrase: this.config.passphrase,
         readyTimeout: 10000,
-        hostVerifier: (keyHash) => {
+        // Async hostVerifier — pauses the SSH handshake until the client approves
+        hostVerifier: (keyHash: Buffer | string, callback: (valid: boolean) => void) => {
+          // Compute SHA-256 fingerprint in OpenSSH format (SHA256:<base64>)
+          const raw = Buffer.isBuffer(keyHash) ? keyHash : Buffer.from(String(keyHash), 'hex')
+          const fingerprint = `SHA256:${createHash('sha256').update(raw).digest('base64')}`
+
+          // If caller pre-supplied a fingerprint, short-circuit — no modal needed
           const provided = this.config.hostFingerprint?.trim()
-          if (!provided) {
-            // No fingerprint supplied — warn but allow (opt-in verification)
-            this.onError(
-              'Warning: no host fingerprint provided — the server\'s identity has not been verified (MITM risk).',
-            )
-            return true
+          if (provided) {
+            const match = fingerprint.toLowerCase() === provided.toLowerCase()
+            if (!match) this.onError(`Host key fingerprint mismatch. Expected "${provided}", got "${fingerprint}". Connection blocked.`)
+            callback(match)
+            return
           }
-          // Normalise both sides to lowercase for comparison
-          const match = keyHash.toLowerCase() === provided.toLowerCase()
-          if (!match) {
-            this.onError(
-              `Host key fingerprint mismatch — expected "${provided}" but got "${keyHash}". Connection blocked.`,
-            )
-          }
-          return match
+
+          // Interactive TOFU: ask the client to approve/reject
+          this.onFingerprintChallenge(fingerprint, callback)
         },
       })
   }
