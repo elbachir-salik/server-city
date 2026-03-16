@@ -6,7 +6,7 @@ export function parseCPU(raw: string): { overall: number; cores: number[] } {
   //   %Cpu(s):  5.0 us,  2.0 sy,  0.0 ni, 92.0 id, ...
   // Older top format:
   //   Cpu(s): 5.0%us,  2.0%sy, ... 92.0%id, ...
-  let idle = 0
+  let idle: number | null = null
 
   const modernMatch = raw.match(/(\d+\.?\d*)\s*id/)
   if (modernMatch) {
@@ -17,7 +17,8 @@ export function parseCPU(raw: string): { overall: number; cores: number[] } {
     if (legacyMatch) idle = parseFloat(legacyMatch[1])
   }
 
-  const overall = isNaN(idle) ? 0 : Math.max(0, Math.min(100, 100 - idle))
+  // No match or NaN → report 0 rather than a misleading 100%
+  const overall = idle === null || isNaN(idle) ? 0 : Math.max(0, Math.min(100, 100 - idle))
   return { overall, cores: [] }
 }
 

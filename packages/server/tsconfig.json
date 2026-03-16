@@ -8,5 +8,5 @@
       "@servercity/shared": ["../shared/src/types/index.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "src/__tests__"]
 }
