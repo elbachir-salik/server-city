@@ -16,6 +16,8 @@ export function useWebSocket() {
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const retryCountRef = useRef(0)
   const intentionalRef = useRef(false) // true when user explicitly disconnects
+  // Full credentials kept in memory only — never written to Zustand or localStorage
+  const credentialsRef = useRef<ConnectionConfig | null>(null)
 
   const {
     setStatus, setHostname, setMetrics, setMetricsStale,
@@ -103,11 +105,12 @@ export function useWebSocket() {
         }
       }, 1000)
 
-      const { lastConfig } = useServerStore.getState()
-      if (lastConfig) {
+      // Use full in-memory credentials (never stored in Zustand)
+      if (credentialsRef.current) {
+        const creds = credentialsRef.current
         retryTimerRef.current = setTimeout(() => {
           setStatus('connecting')
-          openWS(lastConfig)
+          openWS(creds)
         }, delayMs)
       }
     }
@@ -117,25 +120,26 @@ export function useWebSocket() {
     intentionalRef.current = false
     retryCountRef.current = 0
     clearTimers()
-    setLastConfig(config)
+    credentialsRef.current = config          // hold full creds in memory only
+    setLastConfig(config)                    // stores host/port/username only (S3)
     setStatus('connecting')
     openWS(config)
   }, [openWS, clearTimers, setLastConfig, setStatus])
 
   const reconnect = useCallback(() => {
-    const { lastConfig } = useServerStore.getState()
-    if (!lastConfig) return
+    if (!credentialsRef.current) return   // no in-memory creds — user must re-enter
     intentionalRef.current = false
     retryCountRef.current = 0
     clearTimers()
     setStatus('connecting')
-    openWS(lastConfig)
+    openWS(credentialsRef.current)
   }, [openWS, clearTimers, setStatus])
 
   const disconnect = useCallback(() => {
     intentionalRef.current = true
     clearTimers()
     retryCountRef.current = 0
+    credentialsRef.current = null            // wipe credentials from memory
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       const msg: WSClientMessage = { type: 'disconnect' }
       wsRef.current.send(JSON.stringify(msg))
