@@ -23,6 +23,9 @@ function isValidUsername(username: unknown): username is string {
   return typeof username === 'string' && username.trim().length > 0 && username.length <= 64
 }
 
+const MAX_PASSWORD_LEN = 1024        // 1 KB
+const MAX_PRIVATE_KEY_LEN = 16384    // 16 KB
+
 export interface ValidationError {
   field: string
   message: string
@@ -64,6 +67,14 @@ export function validateConnectionConfig(payload: unknown): ValidationError[] {
       field: 'privateKey',
       message: 'Private key must be a PEM-encoded key starting with "-----BEGIN".',
     })
+  }
+
+  if (typeof p.password === 'string' && p.password.length > MAX_PASSWORD_LEN) {
+    errors.push({ field: 'password', message: 'Password exceeds maximum allowed length.' })
+  }
+
+  if (typeof p.privateKey === 'string' && p.privateKey.length > MAX_PRIVATE_KEY_LEN) {
+    errors.push({ field: 'privateKey', message: 'Private key exceeds maximum allowed length (16 KB).' })
   }
 
   return errors
