@@ -60,7 +60,14 @@ export function Building({ metrics, connected }: BuildingProps) {
       <WaterFill memPercent={metrics.memory.usedPercent} />
 
       {metrics.disk.slice(0, FLOORS).map((d, i) => (
-        <DiskFloor key={d.mount} usedPercent={d.usedPercent} floor={i} />
+        <DiskFloor
+          key={d.mount}
+          usedPercent={d.usedPercent}
+          usedGb={d.usedGb}
+          totalGb={d.totalGb}
+          mount={d.mount}
+          floor={i}
+        />
       ))}
 
       {Array.from({ length: FLOORS }).map((_, i) => (
