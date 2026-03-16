@@ -10,9 +10,10 @@ import { SceneLights } from '../scene/SceneLights'
 interface SceneProps {
   metrics: ServerMetrics | null
   connected: boolean
+  isConnecting?: boolean
 }
 
-export function Scene({ metrics, connected }: SceneProps) {
+export function Scene({ metrics, connected, isConnecting = false }: SceneProps) {
   const cpuPercent = metrics?.cpu.overall ?? 0
   const memPercent = metrics?.memory.usedPercent ?? 0
 
@@ -28,7 +29,7 @@ export function Scene({ metrics, connected }: SceneProps) {
       {metrics && connected ? (
         <Building metrics={metrics} connected={connected} />
       ) : (
-        <IdleBuilding />
+        <IdleBuilding connecting={isConnecting} />
       )}
 
       <OrbitControls
