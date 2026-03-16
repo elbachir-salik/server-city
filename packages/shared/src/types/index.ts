@@ -34,7 +34,7 @@ export interface ConnectionConfig {
 }
 
 export type WSMessage =
-  | { type: 'metrics'; payload: ServerMetrics }
+  | { type: 'metrics'; payload: ServerMetrics; stale?: boolean }
   | { type: 'connected'; payload: { hostname: string } }
   | { type: 'error'; payload: { message: string } }
   | { type: 'disconnected' }

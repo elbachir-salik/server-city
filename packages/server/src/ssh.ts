@@ -1,6 +1,7 @@
 import { Client } from 'ssh2'
 import { ConnectionConfig, ServerMetrics } from '@servercity/shared'
 import { buildMetrics } from './metrics'
+import { friendlySSHError } from './errorMessages'
 
 const POLL_INTERVAL = 2000
 const SEP = '---SEP---'
@@ -24,7 +25,7 @@ export class SSHSession {
 
   constructor(
     private config: ConnectionConfig,
-    private onMetrics: (m: ServerMetrics) => void,
+    private onMetrics: (m: ServerMetrics, stale?: boolean) => void,
     private onConnected: (hostname: string) => void,
     private onError: (msg: string) => void,
     private onDisconnect: () => void,
@@ -42,7 +43,7 @@ export class SSHSession {
         this.startPolling()
       })
       .on('error', (err) => {
-        this.onError(err.message)
+        this.onError(friendlySSHError(err.message))
       })
       .on('close', () => {
         this.alive = false
@@ -78,7 +79,7 @@ export class SSHSession {
     this.execCommand(METRICS_CMD, (err, output) => {
       if (err) {
         console.error('[ssh] metrics exec error:', err.message)
-        if (this.lastMetrics) this.onMetrics(this.lastMetrics)
+        if (this.lastMetrics) this.onMetrics(this.lastMetrics, true)
         return
       }
       try {
@@ -86,10 +87,10 @@ export class SSHSession {
         if (parts.length < 4) throw new Error('Unexpected output segments: ' + parts.length)
         const metrics = buildMetrics(parts[0], parts[1], parts[2], parts[3])
         this.lastMetrics = metrics
-        this.onMetrics(metrics)
+        this.onMetrics(metrics, false)
       } catch (e) {
         console.error('[ssh] parse error:', e)
-        if (this.lastMetrics) this.onMetrics(this.lastMetrics)
+        if (this.lastMetrics) this.onMetrics(this.lastMetrics, true)
       }
     })
   }

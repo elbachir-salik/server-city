@@ -54,7 +54,8 @@ export function useWebSocket() {
         setHostname(msg.payload.hostname)
       } else if (msg.type === 'metrics') {
         setMetrics(msg.payload)
-        resetStaleTimer()
+        if (msg.stale) setMetricsStale(true)
+        else resetStaleTimer()
       } else if (msg.type === 'error') {
         setError(msg.payload.message)
       } else if (msg.type === 'disconnected') {

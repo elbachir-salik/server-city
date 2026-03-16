@@ -27,7 +27,7 @@ export function handleWSConnection(ws: WebSocket) {
 
       session = new SSHSession(
         msg.payload,
-        (metrics) => send({ type: 'metrics', payload: metrics }),
+        (metrics, stale) => send({ type: 'metrics', payload: metrics, stale }),
         (hostname) => send({ type: 'connected', payload: { hostname } }),
         (message) => send({ type: 'error', payload: { message } }),
         () => send({ type: 'disconnected' }),
