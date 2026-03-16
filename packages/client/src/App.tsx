@@ -4,6 +4,7 @@ import { ConnectForm } from './components/ConnectForm'
 import { Scene } from './components/Scene'
 import { HUD } from './components/HUD'
 import { FingerprintModal } from './components/FingerprintModal'
+import { HttpWarningBanner } from './components/HttpWarningBanner'
 import { ConnectionConfig } from '@servercity/shared'
 
 export default function App() {
@@ -23,6 +24,8 @@ export default function App() {
 
   return (
     <div className="w-full h-full relative">
+      <HttpWarningBanner />
+
       {/* TOFU fingerprint modal — blocks SSH handshake until user decides */}
       {fingerprintChallenge && (
         <FingerprintModal
