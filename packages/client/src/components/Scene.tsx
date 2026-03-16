@@ -6,6 +6,7 @@ import { Building } from '../scene/Building'
 import { IdleBuilding } from '../scene/IdleBuilding'
 import { CameraRig } from '../scene/CameraRig'
 import { SceneLights } from '../scene/SceneLights'
+import { Skyline } from '../scene/Skyline'
 
 interface SceneProps {
   metrics: ServerMetrics | null
@@ -25,6 +26,7 @@ export function Scene({ metrics, connected, isConnecting = false }: SceneProps) 
       <CameraRig connected={connected} />
 
       <Ground />
+      <Skyline />
 
       {metrics && connected ? (
         <Building metrics={metrics} connected={connected} />
