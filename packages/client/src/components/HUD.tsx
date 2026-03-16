@@ -4,6 +4,7 @@ import { useLerpedMetrics } from '../hooks/useLerpedMetrics'
 
 interface Props {
   onDisconnect: () => void
+  onReconnect: () => void
 }
 
 function formatBytes(bytes: number): string {
@@ -90,8 +91,8 @@ function MetricCard({ label, value, sub, percent, danger, warn }: MetricCardProp
 }
 
 // ── Main HUD ─────────────────────────────────────────────────────────────────
-export function HUD({ onDisconnect }: Props) {
-  const { status, hostname, metrics: rawMetrics, metricsStale } = useServerStore()
+export function HUD({ onDisconnect, onReconnect }: Props) {
+  const { status, hostname, metrics: rawMetrics, metricsStale, retryAttempt, retryCountdown } = useServerStore()
   const metrics = useLerpedMetrics(rawMetrics)
 
   const statusColor =
@@ -142,18 +143,55 @@ export function HUD({ onDisconnect }: Props) {
         </div>
       )}
 
-      {/* Reconnect overlay */}
-      {status === 'disconnected' && (
+      {/* Auto-retry countdown banner */}
+      {status === 'reconnecting' && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-center">
-          <div className="bg-city-panel border border-city-border rounded-xl px-8 py-6 backdrop-blur">
-            <div className="text-red-400 font-semibold mb-1">Connection Lost</div>
-            <div className="text-gray-400 text-sm mb-4">The server disconnected unexpectedly.</div>
+          <div className="bg-city-panel border border-amber-500/40 rounded-xl px-8 py-6 backdrop-blur min-w-[260px]">
+            <div className="text-amber-400 font-semibold mb-1">Connection Lost</div>
+            <div className="text-gray-400 text-sm mb-3">
+              Retrying in <span className="text-white font-bold">{retryCountdown}s</span>
+              <span className="text-gray-500 ml-2">(attempt {retryAttempt}/3)</span>
+            </div>
+            <div className="h-1 rounded-full bg-white/10 mb-4 overflow-hidden">
+              <div
+                className="h-full bg-amber-400 rounded-full transition-all duration-1000"
+                style={{ width: `${((3 - retryCountdown) / 3) * 100}%` }}
+              />
+            </div>
             <button
               onClick={onDisconnect}
-              className="bg-city-accent hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+              className="text-gray-500 hover:text-gray-300 text-xs transition-colors"
             >
-              Back to Connect
+              Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Manual reconnect overlay (after retries exhausted or server-side disconnect) */}
+      {status === 'disconnected' && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-center">
+          <div className="bg-city-panel border border-city-border rounded-xl px-8 py-6 backdrop-blur min-w-[260px]">
+            <div className="text-red-400 font-semibold mb-1">Disconnected</div>
+            <div className="text-gray-400 text-sm mb-4">
+              {retryAttempt > 0
+                ? `Auto-retry failed after ${retryAttempt} attempt${retryAttempt > 1 ? 's' : ''}.`
+                : 'The server disconnected.'}
+            </div>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={onReconnect}
+                className="bg-city-accent hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+              >
+                Reconnect
+              </button>
+              <button
+                onClick={onDisconnect}
+                className="bg-transparent border border-gray-700 hover:border-gray-500 text-gray-400 hover:text-white rounded-lg px-4 py-2 text-sm transition-colors"
+              >
+                Back
+              </button>
+            </div>
           </div>
         </div>
       )}

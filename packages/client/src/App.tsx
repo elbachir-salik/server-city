@@ -7,28 +7,30 @@ import { ConnectionConfig } from '@servercity/shared'
 
 export default function App() {
   const { status, metrics, errorMessage, reset } = useServerStore()
-  const { connect, disconnect } = useWebSocket()
+  const { connect, reconnect, disconnect } = useWebSocket()
 
   const isConnected = status === 'connected'
   const isConnecting = status === 'connecting'
   const showForm = status === 'idle' || status === 'error' || status === 'connecting'
-  // Keep scene mounted during connecting so the wireframe pulse plays;
-  // only truly unmount it when we're back to idle/error
   const showScene = !showForm || isConnecting
+  // Show HUD whenever the scene is visible and we're past the initial connecting state
+  const showHUD = isConnected || status === 'disconnected' || status === 'reconnecting'
 
   const handleConnect = (config: ConnectionConfig) => connect(config)
   const handleDisconnect = () => { disconnect(); reset() }
+  const handleReconnect = () => reconnect()
 
   return (
     <div className="w-full h-full relative">
-      {/* 3D scene — always mounted once connecting starts; fades in */}
+      {/* 3D scene — mounts as soon as connecting starts */}
       <div
         className="absolute inset-0 transition-opacity duration-700"
         style={{ opacity: showScene ? 1 : 0, pointerEvents: showScene ? 'auto' : 'none' }}
       >
         <Scene metrics={metrics} connected={isConnected} isConnecting={isConnecting} />
-        {isConnected && <HUD onDisconnect={handleDisconnect} />}
-        {status === 'disconnected' && <HUD onDisconnect={handleDisconnect} />}
+        {showHUD && (
+          <HUD onDisconnect={handleDisconnect} onReconnect={handleReconnect} />
+        )}
       </div>
 
       {/* Connect form — fades out when scene takes over */}
