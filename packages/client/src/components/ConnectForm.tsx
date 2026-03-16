@@ -221,7 +221,26 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
             </div>
           ) : (
             <>
+              {/* Hidden file input — triggered by the button below */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pem,.key,.ppk,text/plain"
+                className="hidden"
+                onChange={handleKeyFile}
+              />
+
               <Field label="Private Key (PEM)" error={touched.auth ? fieldErrors.auth : undefined}>
+                <div className="flex gap-2 mb-1.5">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs text-city-accent hover:text-indigo-300 border border-gray-700 hover:border-city-accent rounded-lg px-2.5 py-1 transition-colors"
+                  >
+                    Upload key file
+                  </button>
+                  <span className="text-gray-600 text-xs self-center">or paste below</span>
+                </div>
                 <textarea
                   value={privateKey}
                   onChange={(e) => { setPrivateKey(e.target.value); revalidate() }}
