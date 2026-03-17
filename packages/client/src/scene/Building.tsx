@@ -92,7 +92,7 @@ export function Building({ metrics, connected }: BuildingProps) {
         {Array.from({ length: FLOORS }).map((_, i) => (
           <mesh key={i} position={[0, i * FLOOR_H, 0]}>
             <boxGeometry args={[BLDG_W + 0.02, 0.04, BLDG_D + 0.02]} />
-            <meshStandardMaterial color="#3a3a6e" emissive="#3a3a6e" emissiveIntensity={0.2} />
+            <meshStandardMaterial color="#4a4a8e" emissive="#5a5aae" emissiveIntensity={0.35} />
           </mesh>
         ))}
 
