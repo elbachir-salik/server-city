@@ -90,21 +90,14 @@ export function Building({ metrics, connected }: BuildingProps) {
         {Array.from({ length: FLOORS }).map((_, i) => (
           <mesh key={i} position={[0, i * FLOOR_H, 0]}>
             <boxGeometry args={[BLDG_W + 0.02, 0.04, BLDG_D + 0.02]} />
-            <meshStandardMaterial color="#2a2a4e" />
+            <meshStandardMaterial color="#3a3a6e" emissive="#3a3a6e" emissiveIntensity={0.2} />
           </mesh>
         ))}
 
         <WaterFill memPercent={metrics.memory.usedPercent} />
 
-        {metrics.disk.slice(0, FLOORS).map((d, i) => (
-          <DiskFloor
-            key={d.mount}
-            usedPercent={d.usedPercent}
-            usedGb={d.usedGb}
-            totalGb={d.totalGb}
-            mount={d.mount}
-            floor={i}
-          />
+        {Array.from({ length: FLOORS }).map((_, i) => (
+          <DiskFloor key={i} disk={metrics.disk[i] ?? null} floor={i} />
         ))}
 
         {Array.from({ length: FLOORS }).map((_, i) => (
