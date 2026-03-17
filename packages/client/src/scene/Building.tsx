@@ -49,7 +49,10 @@ export function Building({ metrics, connected }: BuildingProps) {
   const STIFFNESS = 0.1
   const DAMPING = 0.82
 
-  const isHighCPU = metrics.cpu.overall > 90
+  const isHighCPU  = metrics.cpu.overall > 90
+  const maxDiskPct = metrics.disk.reduce((m, d) => Math.max(m, d.usedPercent), 0)
+  const isDiskWarn = maxDiskPct > 70
+  const isDiskCrit = maxDiskPct > 90
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return
@@ -74,15 +77,26 @@ export function Building({ metrics, connected }: BuildingProps) {
       groupRef.current.position.x = 0
     }
 
-    // Animate shell emissive intensity independently for high-CPU pulse
+    // Animate shell emissive — priority: CPU (red) > disk-crit (orange) > disk-warn (amber) > idle (blue)
     if (shellMatRef.current) {
       if (isHighCPU) {
-        const freq = 2 + (metrics.cpu.overall - 90) * 0.15 // faster at higher CPU
+        const freq = 2 + (metrics.cpu.overall - 90) * 0.15
         shellMatRef.current.emissiveIntensity = 0.2 + Math.abs(Math.sin(clock.getElapsedTime() * freq)) * 0.25
+        shellMatRef.current.emissive.set('#ff3300')
+      } else if (isDiskCrit) {
+        // Disk >90% — orange pulse, speed scales with fullness
+        const severity = (maxDiskPct - 90) / 10   // 0→1 as disk goes 90→100%
+        const freq = 1.5 + severity * 2.5
+        shellMatRef.current.emissiveIntensity = 0.18 + Math.abs(Math.sin(clock.getElapsedTime() * freq)) * 0.22
+        shellMatRef.current.emissive.set('#ff6600')
+      } else if (isDiskWarn) {
+        // Disk 70–90% — slow amber glow
+        shellMatRef.current.emissiveIntensity += (0.12 - shellMatRef.current.emissiveIntensity) * 0.05
+        shellMatRef.current.emissive.set('#ffaa00')
       } else {
         shellMatRef.current.emissiveIntensity += (0.05 - shellMatRef.current.emissiveIntensity) * 0.05
+        shellMatRef.current.emissive.set('#3344ff')
       }
-      shellMatRef.current.emissive.set(isHighCPU ? '#ff3300' : '#3344ff')
     }
   })
 

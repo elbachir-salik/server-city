@@ -4,6 +4,7 @@ import { OrbitControls } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { FLOOR_H } from './constants'
+import { useServerStore } from '../store/useServerStore'
 
 const IDLE_POS      = new THREE.Vector3(10, 9, 13)
 const CONNECTED_POS = new THREE.Vector3(8, 7, 10)
@@ -21,6 +22,15 @@ export function CameraRig({ connected, selectedFloor }: CameraRigProps) {
   const controlsRef  = useRef<OrbitControlsImpl>(null)
   const targetCamPos = useRef(connected ? CONNECTED_POS.clone() : IDLE_POS.clone())
   const targetLookAt = useRef(new THREE.Vector3(0, CENTER_Y, 0))
+
+  const cameraResetToken = useServerStore(s => s.cameraResetToken)
+
+  // Reset camera to default view
+  useEffect(() => {
+    targetCamPos.current.copy(connected ? CONNECTED_POS : IDLE_POS)
+    targetLookAt.current.set(0, CENTER_Y, 0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraResetToken])
 
   useEffect(() => {
     if (selectedFloor !== null) {

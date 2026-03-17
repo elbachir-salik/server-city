@@ -148,6 +148,13 @@ export function parseNetwork(raw: string): { bytesIn: number; bytesOut: number }
 }
 
 // ── Subdirectory usage (from `du -k -x --max-depth=1 <mount>`) ───────────────
+
+// Directories that are system noise — never useful to show as "full" indicators
+const SKIP_DIRS = new Set([
+  'lost+found', 'proc', 'sys', 'dev', 'run', 'tmp', 'snap',
+  'mnt', 'media', 'cdrom', 'srv', 'selinux',
+])
+
 export function parseDirUsage(raw: string, mount: string): SubdirEntry[] {
   // du output: "<KB>\t<path>" per line, first line is the total for the mount itself
   return raw
@@ -160,6 +167,9 @@ export function parseDirUsage(raw: string, mount: string): SubdirEntry[] {
       const kb = parseInt(line.slice(0, tab), 10)
       const path = line.slice(tab + 1).trim()
       if (isNaN(kb) || kb <= 0 || !path || path === mount) return null
+      const name = path.split('/').pop() ?? ''
+      // Skip hidden dirs (starting with .) and known system noise
+      if (name.startsWith('.') || SKIP_DIRS.has(name)) return null
       return { path, usedGb: kb / (1024 * 1024) }
     })
     .filter((e): e is SubdirEntry => e !== null)

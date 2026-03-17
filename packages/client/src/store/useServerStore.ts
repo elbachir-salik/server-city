@@ -24,6 +24,8 @@ interface ServerStore {
   fingerprintChallenge: FingerprintChallenge | null
   selectedFloor: number | null
   subdirsByMount: Record<string, SubdirEntry[]>
+  cameraResetToken: number
+  diskSidebarVisible: boolean
 
   setStatus: (s: ConnectionStatus) => void
   setHostname: (h: string) => void
@@ -35,6 +37,8 @@ interface ServerStore {
   setFingerprintChallenge: (c: FingerprintChallenge | null) => void
   setSelectedFloor: (floor: number | null) => void
   setSubdirs: (mount: string, subdirs: SubdirEntry[]) => void
+  resetCamera: () => void
+  toggleDiskSidebar: () => void
   reset: () => void
 }
 
@@ -50,6 +54,8 @@ export const useServerStore = create<ServerStore>((set) => ({
   fingerprintChallenge: null,
   selectedFloor: null,
   subdirsByMount: {},
+  cameraResetToken: 0,
+  diskSidebarVisible: true,
 
   setStatus: (status) => set({ status }),
   setHostname: (hostname) => set({ hostname }),
@@ -62,6 +68,8 @@ export const useServerStore = create<ServerStore>((set) => ({
   setSelectedFloor: (selectedFloor) => set({ selectedFloor }),
   setSubdirs: (mount, subdirs) =>
     set((s) => ({ subdirsByMount: { ...s.subdirsByMount, [mount]: subdirs } })),
+  resetCamera: () => set((s) => ({ cameraResetToken: s.cameraResetToken + 1, selectedFloor: null })),
+  toggleDiskSidebar: () => set((s) => ({ diskSidebarVisible: !s.diskSidebarVisible })),
   reset: () =>
     set({
       status: 'idle',
@@ -74,6 +82,8 @@ export const useServerStore = create<ServerStore>((set) => ({
       fingerprintChallenge: null,
       selectedFloor: null,
       subdirsByMount: {},
+      cameraResetToken: 0,
       // intentionally keep lastConfig so reconnect can still work
+      // intentionally keep diskSidebarVisible — user preference
     }),
 }))
