@@ -10,7 +10,7 @@ import { ConnectionConfig } from '@servercity/shared'
 
 export default function App() {
   const { status, metrics, errorMessage, reset, fingerprintChallenge } = useServerStore()
-  const { connect, reconnect, disconnect, sendFingerprintResponse } = useWebSocket()
+  const { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs } = useWebSocket()
 
   const isConnected = status === 'connected'
   const isConnecting = status === 'connecting'
@@ -44,7 +44,7 @@ export default function App() {
         {showHUD && (
           <HUD onDisconnect={handleDisconnect} onReconnect={handleReconnect} />
         )}
-        {showHUD && <DiskSidebar />}
+        {showHUD && <DiskSidebar onRequestSubdirs={requestSubdirs} />}
       </div>
 
       {/* Connect form — fades out when scene takes over */}

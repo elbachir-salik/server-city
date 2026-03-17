@@ -21,7 +21,7 @@ export function useWebSocket() {
 
   const {
     setStatus, setHostname, setMetrics, setMetricsStale,
-    setError, setLastConfig, setRetry, setFingerprintChallenge,
+    setError, setLastConfig, setRetry, setFingerprintChallenge, setSubdirs,
   } = useServerStore()
 
   const clearTimers = useCallback(() => {
@@ -67,6 +67,8 @@ export function useWebSocket() {
         clearTimers()
       } else if (msg.type === 'fingerprint_challenge') {
         setFingerprintChallenge(msg.payload)
+      } else if (msg.type === 'subdirs_result') {
+        setSubdirs(msg.payload.mount, msg.payload.subdirs)
       }
     }
 
@@ -116,7 +118,7 @@ export function useWebSocket() {
         }, delayMs)
       }
     }
-  }, [setStatus, setHostname, setMetrics, setMetricsStale, setError, setRetry, resetStaleTimer, clearTimers, setFingerprintChallenge])
+  }, [setStatus, setHostname, setMetrics, setMetricsStale, setError, setRetry, resetStaleTimer, clearTimers, setFingerprintChallenge, setSubdirs])
 
   const connect = useCallback((config: ConnectionConfig) => {
     intentionalRef.current = false
@@ -158,7 +160,14 @@ export function useWebSocket() {
     }
   }, [setFingerprintChallenge])
 
+  const requestSubdirs = useCallback((mount: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg: WSClientMessage = { type: 'request_subdirs', payload: { mount } }
+      wsRef.current.send(JSON.stringify(msg))
+    }
+  }, [])
+
   useEffect(() => () => disconnect(), [disconnect])
 
-  return { connect, reconnect, disconnect, sendFingerprintResponse }
+  return { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs }
 }

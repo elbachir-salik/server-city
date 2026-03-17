@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { BLDG_D, BLDG_W, FLOOR_H } from './constants'
+import { useServerStore } from '../store/useServerStore'
 
 export interface DiskData {
   mount: string
@@ -82,6 +83,7 @@ export function DiskFloor({ disk, floor, selected = false }: DiskFloorProps) {
 
   const freeGb = disk ? disk.totalGb - disk.usedGb : 0
   const panelVisible = showPanel || selected
+  const subdirs = useServerStore(s => disk ? (s.subdirsByMount[disk.mount] ?? []) : [])
 
   return (
     <>
@@ -199,6 +201,38 @@ export function DiskFloor({ disk, floor, selected = false }: DiskFloorProps) {
             <div style={{ fontSize: 19, fontWeight: 800, marginTop: 5, letterSpacing: '-0.02em' }}>
               {pct}%
             </div>
+
+            {/* Subdirectory breakdown — populated when floor is selected */}
+            {selected && subdirs.length > 0 && (
+              <div style={{ marginTop: 8, borderTop: `1px solid ${color}33`, paddingTop: 7 }}>
+                <div style={{ fontSize: 9, opacity: 0.55, marginBottom: 5, letterSpacing: '0.06em' }}>
+                  TOP SUBDIRECTORIES
+                </div>
+                {subdirs.map((d) => {
+                  const dirPct = disk ? Math.min(100, (d.usedGb / disk.totalGb) * 100) : 0
+                  const name = d.path.split('/').pop() || d.path
+                  return (
+                    <div key={d.path} style={{ marginBottom: 5 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 2 }}>
+                        <span style={{ opacity: 0.85, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          /{name}
+                        </span>
+                        <span style={{ opacity: 0.7 }}>{d.usedGb >= 1 ? `${d.usedGb.toFixed(1)} GB` : `${(d.usedGb * 1024).toFixed(0)} MB`}</span>
+                      </div>
+                      <div style={{ height: 3, background: '#0b0b1c', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ width: `${dirPct}%`, height: '100%', background: color, opacity: 0.75, borderRadius: 2 }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {selected && subdirs.length === 0 && (
+              <div style={{ marginTop: 8, borderTop: `1px solid ${color}22`, paddingTop: 6, fontSize: 9, opacity: 0.4 }}>
+                Loading subdirectories…
+              </div>
+            )}
           </div>
         </Html>
       )}

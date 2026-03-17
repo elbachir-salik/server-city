@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { ServerMetrics, ConnectionConfig } from '@servercity/shared'
+import { ServerMetrics, ConnectionConfig, SubdirEntry } from '@servercity/shared'
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error'
 
@@ -23,6 +23,7 @@ interface ServerStore {
   retryCountdown: number     // seconds until next retry
   fingerprintChallenge: FingerprintChallenge | null
   selectedFloor: number | null
+  subdirsByMount: Record<string, SubdirEntry[]>
 
   setStatus: (s: ConnectionStatus) => void
   setHostname: (h: string) => void
@@ -33,6 +34,7 @@ interface ServerStore {
   setRetry: (attempt: number, countdown: number) => void
   setFingerprintChallenge: (c: FingerprintChallenge | null) => void
   setSelectedFloor: (floor: number | null) => void
+  setSubdirs: (mount: string, subdirs: SubdirEntry[]) => void
   reset: () => void
 }
 
@@ -47,6 +49,7 @@ export const useServerStore = create<ServerStore>((set) => ({
   retryCountdown: 0,
   fingerprintChallenge: null,
   selectedFloor: null,
+  subdirsByMount: {},
 
   setStatus: (status) => set({ status }),
   setHostname: (hostname) => set({ hostname }),
@@ -57,6 +60,8 @@ export const useServerStore = create<ServerStore>((set) => ({
   setRetry: (retryAttempt, retryCountdown) => set({ retryAttempt, retryCountdown }),
   setFingerprintChallenge: (fingerprintChallenge) => set({ fingerprintChallenge }),
   setSelectedFloor: (selectedFloor) => set({ selectedFloor }),
+  setSubdirs: (mount, subdirs) =>
+    set((s) => ({ subdirsByMount: { ...s.subdirsByMount, [mount]: subdirs } })),
   reset: () =>
     set({
       status: 'idle',
@@ -68,6 +73,7 @@ export const useServerStore = create<ServerStore>((set) => ({
       retryCountdown: 0,
       fingerprintChallenge: null,
       selectedFloor: null,
+      subdirsByMount: {},
       // intentionally keep lastConfig so reconnect can still work
     }),
 }))

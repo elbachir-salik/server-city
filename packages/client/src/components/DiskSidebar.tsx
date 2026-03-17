@@ -6,7 +6,11 @@ function diskColor(pct: number): string {
   return '#22c55e'
 }
 
-export function DiskSidebar() {
+interface DiskSidebarProps {
+  readonly onRequestSubdirs: (mount: string) => void
+}
+
+export function DiskSidebar({ onRequestSubdirs }: DiskSidebarProps) {
   const metrics      = useServerStore(s => s.metrics)
   const selectedFloor = useServerStore(s => s.selectedFloor)
   const setSelectedFloor = useServerStore(s => s.setSelectedFloor)
@@ -35,7 +39,11 @@ export function DiskSidebar() {
         return (
           <button
             key={d.mount}
-            onClick={() => setSelectedFloor(selected ? null : i)}
+            onClick={() => {
+              const next = selected ? null : i
+              setSelectedFloor(next)
+              if (next !== null) onRequestSubdirs(d.mount)
+            }}
             style={{
               background: selected ? 'rgba(58,58,110,0.92)' : 'rgba(8,8,18,0.78)',
               border: `1px solid ${selected ? color : color + '33'}`,
