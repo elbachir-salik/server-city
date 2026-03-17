@@ -12,6 +12,31 @@ export interface FingerprintChallenge {
   port: number
 }
 
+// Saved connection entry — no passwords, no keys
+export interface SavedConnection {
+  id: string
+  label: string
+  host: string
+  port: number
+  username: string
+}
+
+const SAVED_KEY = 'servercity:connections'
+
+function loadSaved(): SavedConnection[] {
+  try {
+    const raw = localStorage.getItem(SAVED_KEY)
+    if (!raw) return []
+    return JSON.parse(raw) as SavedConnection[]
+  } catch {
+    return []
+  }
+}
+
+function persistSaved(list: SavedConnection[]) {
+  try { localStorage.setItem(SAVED_KEY, JSON.stringify(list)) } catch { /* ignore */ }
+}
+
 interface ServerStore {
   status: ConnectionStatus
   hostname: string
@@ -26,6 +51,7 @@ interface ServerStore {
   subdirsByMount: Record<string, SubdirEntry[]>
   cameraResetToken: number
   diskSidebarVisible: boolean
+  savedConnections: SavedConnection[]
 
   setStatus: (s: ConnectionStatus) => void
   setHostname: (h: string) => void
@@ -39,6 +65,8 @@ interface ServerStore {
   setSubdirs: (mount: string, subdirs: SubdirEntry[]) => void
   resetCamera: () => void
   toggleDiskSidebar: () => void
+  saveConnection: (cfg: SavedConnection) => void
+  deleteConnection: (id: string) => void
   reset: () => void
 }
 
@@ -56,6 +84,7 @@ export const useServerStore = create<ServerStore>((set) => ({
   subdirsByMount: {},
   cameraResetToken: 0,
   diskSidebarVisible: true,
+  savedConnections: loadSaved(),
 
   setStatus: (status) => set({ status }),
   setHostname: (hostname) => set({ hostname }),
@@ -70,6 +99,22 @@ export const useServerStore = create<ServerStore>((set) => ({
     set((s) => ({ subdirsByMount: { ...s.subdirsByMount, [mount]: subdirs } })),
   resetCamera: () => set((s) => ({ cameraResetToken: s.cameraResetToken + 1, selectedFloor: null })),
   toggleDiskSidebar: () => set((s) => ({ diskSidebarVisible: !s.diskSidebarVisible })),
+  saveConnection: (conn) =>
+    set((s) => {
+      // Upsert by id
+      const existing = s.savedConnections.findIndex(c => c.id === conn.id)
+      const next = existing >= 0
+        ? s.savedConnections.map(c => c.id === conn.id ? conn : c)
+        : [...s.savedConnections, conn]
+      persistSaved(next)
+      return { savedConnections: next }
+    }),
+  deleteConnection: (id) =>
+    set((s) => {
+      const next = s.savedConnections.filter(c => c.id !== id)
+      persistSaved(next)
+      return { savedConnections: next }
+    }),
   reset: () =>
     set({
       status: 'idle',
@@ -85,5 +130,6 @@ export const useServerStore = create<ServerStore>((set) => ({
       cameraResetToken: 0,
       // intentionally keep lastConfig so reconnect can still work
       // intentionally keep diskSidebarVisible — user preference
+      // intentionally keep savedConnections — they persist across sessions
     }),
 }))

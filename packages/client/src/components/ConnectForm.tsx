@@ -1,5 +1,6 @@
 import { useState, FormEvent, useRef } from 'react'
 import { ConnectionConfig } from '@servercity/shared'
+import { useServerStore, SavedConnection } from '../store/useServerStore'
 
 interface Props {
   onConnect: (config: ConnectionConfig) => void
@@ -67,8 +68,52 @@ const inputCls = (err?: string) =>
     err ? 'border-red-500/70' : 'border-gray-700'
   }`
 
+// ── Saved connections dropdown ────────────────────────────────────────────────
+interface SavedDropdownProps {
+  connections: SavedConnection[]
+  onSelect: (c: SavedConnection) => void
+  onDelete: (id: string) => void
+}
+
+function SavedDropdown({ connections, onSelect, onDelete }: SavedDropdownProps) {
+  if (connections.length === 0) return null
+
+  return (
+    <div className="mb-4">
+      <label className="block text-xs text-gray-400 mb-1">Saved Connections</label>
+      <div className="flex flex-col gap-1.5">
+        {connections.map((c) => (
+          <div
+            key={c.id}
+            className="flex items-center gap-2 bg-black/30 border border-gray-700 rounded-lg px-3 py-2 group"
+          >
+            <button
+              type="button"
+              onClick={() => onSelect(c)}
+              className="flex-1 text-left text-sm text-gray-200 hover:text-white transition-colors"
+            >
+              <span className="font-medium">{c.label || `${c.username}@${c.host}`}</span>
+              <span className="text-gray-500 text-xs ml-2">{c.host}:{c.port}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(c.id)}
+              title="Remove saved connection"
+              className="text-gray-600 hover:text-red-400 text-xs transition-colors opacity-0 group-hover:opacity-100"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Form ─────────────────────────────────────────────────────────────────────
 export function ConnectForm({ onConnect, error, isConnecting }: Props) {
+  const { savedConnections, saveConnection, deleteConnection } = useServerStore()
+
   const [host, setHost] = useState('')
   const [port, setPort] = useState('22')
   const [username, setUsername] = useState('')
@@ -77,6 +122,8 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
   const [passphrase, setPassphrase] = useState('')
   const [authMode, setAuthMode] = useState<'password' | 'key'>('password')
   const [hostFingerprint, setHostFingerprint] = useState('')
+  const [saveConn, setSaveConn] = useState(false)
+  const [connLabel, setConnLabel] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const keyEncrypted = authMode === 'key' && privateKey.trim() ? detectKeyEncryption(privateKey) : null
@@ -113,6 +160,14 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
     return errors
   }
 
+  const handleSelectSaved = (c: SavedConnection) => {
+    setHost(c.host)
+    setPort(String(c.port))
+    setUsername(c.username)
+    setFieldErrors({})
+    setTouched({})
+  }
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     // Mark all fields as touched so errors show
@@ -120,6 +175,17 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
     const errors = validate()
     setFieldErrors(errors)
     if (Object.keys(errors).length > 0) return
+
+    if (saveConn) {
+      const label = connLabel.trim() || `${username.trim()}@${host.trim()}`
+      saveConnection({
+        id: `${host.trim()}:${port}:${username.trim()}`,
+        label,
+        host: host.trim(),
+        port: parseInt(port, 10),
+        username: username.trim(),
+      })
+    }
 
     onConnect({
       host: host.trim(),
@@ -151,6 +217,13 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
           onSubmit={handleSubmit}
           className="rounded-xl border border-city-border bg-city-panel backdrop-blur p-6 space-y-4"
         >
+          {/* Saved connections */}
+          <SavedDropdown
+            connections={savedConnections}
+            onSelect={handleSelectSaved}
+            onDelete={deleteConnection}
+          />
+
           {/* Host + Port */}
           <div className="flex gap-3 items-start">
             <Field label="Host / IP" error={touched.host ? fieldErrors.host : undefined}>
@@ -293,6 +366,31 @@ export function ConnectForm({ onConnect, error, isConnecting }: Props) {
             <p className="text-gray-600 text-xs mt-1">
               Paste the server&apos;s host key fingerprint to prevent MITM attacks. Leave blank to connect without verification.
             </p>
+          </div>
+
+          {/* Save connection checkbox */}
+          <div className="flex items-start gap-2.5">
+            <input
+              id="save-conn"
+              type="checkbox"
+              checked={saveConn}
+              onChange={(e) => setSaveConn(e.target.checked)}
+              className="mt-0.5 accent-city-accent"
+            />
+            <div className="flex-1">
+              <label htmlFor="save-conn" className="text-xs text-gray-400 cursor-pointer select-none">
+                Save this connection <span className="text-gray-600">(no password stored)</span>
+              </label>
+              {saveConn && (
+                <input
+                  type="text"
+                  value={connLabel}
+                  onChange={(e) => setConnLabel(e.target.value)}
+                  placeholder={`${username || 'user'}@${host || 'host'}`}
+                  className="mt-1.5 w-full bg-black/40 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-xs placeholder-gray-600 focus:outline-none focus:border-city-accent"
+                />
+              )}
+            </div>
           </div>
 
           {/* Server-side error */}
