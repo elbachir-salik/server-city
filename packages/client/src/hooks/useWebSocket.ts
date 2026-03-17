@@ -60,6 +60,13 @@ export function useWebSocket() {
         setMetrics(msg.payload)
         if (msg.stale) setMetricsStale(true)
         else resetStaleTimer()
+        // Auto-fetch subdirs for each disk mount we haven't seen yet
+        const cached = useServerStore.getState().subdirsByMount
+        msg.payload.disk.forEach(disk => {
+          if (!cached[disk.mount] && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'request_subdirs', payload: { mount: disk.mount } }))
+          }
+        })
       } else if (msg.type === 'error') {
         setError(msg.payload.message)
       } else if (msg.type === 'disconnected') {

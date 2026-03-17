@@ -23,7 +23,25 @@ function easeOutCubic(t: number): number {
 
 export function Building({ metrics, connected }: BuildingProps) {
   const groupRef = useRef<THREE.Group>(null)
-  const selectedFloor = useServerStore(s => s.selectedFloor)
+  const selectedFloor   = useServerStore(s => s.selectedFloor)
+  const subdirsByMount  = useServerStore(s => s.subdirsByMount)
+
+  // Flatten all subdirs from every disk mount, sorted by size descending.
+  // Each gets usedPercent relative to its parent disk's total.
+  // Falls back to raw disk mount entries while subdirs are still loading.
+  const allSubdirs = metrics.disk
+    .flatMap(disk =>
+      (subdirsByMount[disk.mount] ?? []).map(sub => ({
+        mount: sub.path,
+        usedGb: sub.usedGb,
+        totalGb: disk.totalGb,
+        usedPercent: Math.min(100, Math.round((sub.usedGb / disk.totalGb) * 100)),
+      }))
+    )
+    .sort((a, b) => b.usedGb - a.usedGb)
+    .slice(0, FLOORS)
+
+  const floorData = allSubdirs.length > 0 ? allSubdirs : metrics.disk.slice(0, FLOORS)
   const shellMatRef = useRef<THREE.MeshStandardMaterial>(null)
 
   // Spring state: position, velocity
@@ -99,7 +117,7 @@ export function Building({ metrics, connected }: BuildingProps) {
         <WaterFill memPercent={metrics.memory.usedPercent} />
 
         {Array.from({ length: FLOORS }).map((_, i) => (
-          <DiskFloor key={i} disk={metrics.disk[i] ?? null} floor={i} selected={selectedFloor === i} />
+          <DiskFloor key={i} disk={floorData[i] ?? null} floor={i} selected={selectedFloor === i} />
         ))}
 
         {Array.from({ length: FLOORS }).map((_, i) => (
