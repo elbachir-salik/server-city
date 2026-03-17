@@ -5,6 +5,7 @@ import { Scene } from './components/Scene'
 import { HUD } from './components/HUD'
 import { FingerprintModal } from './components/FingerprintModal'
 import { HttpWarningBanner } from './components/HttpWarningBanner'
+import { DiskSidebar } from './components/DiskSidebar'
 import { ConnectionConfig } from '@servercity/shared'
 
 export default function App() {
@@ -43,6 +44,7 @@ export default function App() {
         {showHUD && (
           <HUD onDisconnect={handleDisconnect} onReconnect={handleReconnect} />
         )}
+        {showHUD && <DiskSidebar />}
       </div>
 
       {/* Connect form — fades out when scene takes over */}

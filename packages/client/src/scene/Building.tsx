@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { ServerMetrics } from '@servercity/shared'
+import { useServerStore } from '../store/useServerStore'
 import { BLDG_D, BLDG_W, FLOORS, FLOOR_H, TOTAL_H } from './constants'
 import { FloorWindows } from './FloorWindows'
 import { WaterFill } from './WaterFill'
@@ -22,6 +23,7 @@ function easeOutCubic(t: number): number {
 
 export function Building({ metrics, connected }: BuildingProps) {
   const groupRef = useRef<THREE.Group>(null)
+  const selectedFloor = useServerStore(s => s.selectedFloor)
   const shellMatRef = useRef<THREE.MeshStandardMaterial>(null)
 
   // Spring state: position, velocity
@@ -97,7 +99,7 @@ export function Building({ metrics, connected }: BuildingProps) {
         <WaterFill memPercent={metrics.memory.usedPercent} />
 
         {Array.from({ length: FLOORS }).map((_, i) => (
-          <DiskFloor key={i} disk={metrics.disk[i] ?? null} floor={i} />
+          <DiskFloor key={i} disk={metrics.disk[i] ?? null} floor={i} selected={selectedFloor === i} />
         ))}
 
         {Array.from({ length: FLOORS }).map((_, i) => (

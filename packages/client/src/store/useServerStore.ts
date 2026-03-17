@@ -22,6 +22,7 @@ interface ServerStore {
   retryAttempt: number       // 0 = not retrying
   retryCountdown: number     // seconds until next retry
   fingerprintChallenge: FingerprintChallenge | null
+  selectedFloor: number | null
 
   setStatus: (s: ConnectionStatus) => void
   setHostname: (h: string) => void
@@ -31,6 +32,7 @@ interface ServerStore {
   setLastConfig: (c: ConnectionConfig) => void
   setRetry: (attempt: number, countdown: number) => void
   setFingerprintChallenge: (c: FingerprintChallenge | null) => void
+  setSelectedFloor: (floor: number | null) => void
   reset: () => void
 }
 
@@ -44,6 +46,7 @@ export const useServerStore = create<ServerStore>((set) => ({
   retryAttempt: 0,
   retryCountdown: 0,
   fingerprintChallenge: null,
+  selectedFloor: null,
 
   setStatus: (status) => set({ status }),
   setHostname: (hostname) => set({ hostname }),
@@ -53,6 +56,7 @@ export const useServerStore = create<ServerStore>((set) => ({
   setLastConfig: ({ host, port, username }) => set({ lastConfig: { host, port, username } }),
   setRetry: (retryAttempt, retryCountdown) => set({ retryAttempt, retryCountdown }),
   setFingerprintChallenge: (fingerprintChallenge) => set({ fingerprintChallenge }),
+  setSelectedFloor: (selectedFloor) => set({ selectedFloor }),
   reset: () =>
     set({
       status: 'idle',
@@ -63,6 +67,7 @@ export const useServerStore = create<ServerStore>((set) => ({
       retryAttempt: 0,
       retryCountdown: 0,
       fingerprintChallenge: null,
+      selectedFloor: null,
       // intentionally keep lastConfig so reconnect can still work
     }),
 }))
