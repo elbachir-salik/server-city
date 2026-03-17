@@ -1,8 +1,9 @@
 import { createHash } from 'crypto'
 import { Client } from 'ssh2'
 import { ConnectionConfig, ServerMetrics } from '@servercity/shared'
-import { buildMetrics } from './metrics'
+import { buildMetrics, parseDirUsage } from './metrics'
 import { friendlySSHError } from './errorMessages'
+import { SubdirEntry } from '@servercity/shared'
 
 const POLL_INTERVAL = 2000
 const SEP = '---SEP---'
@@ -149,6 +150,18 @@ export class SSHSession {
       clearInterval(this.pollTimer)
       this.pollTimer = null
     }
+  }
+
+  /** Run `du --max-depth=1` on a mount and return the top subdirectories by size. */
+  getSubdirUsage(mount: string, cb: (subdirs: SubdirEntry[]) => void) {
+    if (!this.alive) { cb([]); return }
+    // -k: kilobyte blocks  -x: stay on same filesystem  --max-depth=1: one level only
+    // Quote the mount with single quotes (validated to contain only safe chars upstream)
+    const cmd = `du -k -x --max-depth=1 '${mount}' 2>/dev/null | sort -rn | head -11`
+    this.execCommand(cmd, (err, output) => {
+      if (err) { cb([]); return }
+      cb(parseDirUsage(output, mount))
+    })
   }
 
   disconnect() {

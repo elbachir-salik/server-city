@@ -1,4 +1,4 @@
-import { ServerMetrics } from '@servercity/shared'
+import { ServerMetrics, SubdirEntry } from '@servercity/shared'
 
 // ── CPU ───────────────────────────────────────────────────────────────────────
 export function parseCPU(raw: string): { overall: number; cores: number[] } {
@@ -145,6 +145,26 @@ export function parseNetwork(raw: string): { bytesIn: number; bytesOut: number }
   }
 
   return { bytesIn, bytesOut }
+}
+
+// ── Subdirectory usage (from `du -k -x --max-depth=1 <mount>`) ───────────────
+export function parseDirUsage(raw: string, mount: string): SubdirEntry[] {
+  // du output: "<KB>\t<path>" per line, first line is the total for the mount itself
+  return raw
+    .trim()
+    .split('\n')
+    .slice(1) // drop the first line (total for the mount itself)
+    .map((line) => {
+      const tab = line.indexOf('\t')
+      if (tab === -1) return null
+      const kb = parseInt(line.slice(0, tab), 10)
+      const path = line.slice(tab + 1).trim()
+      if (isNaN(kb) || kb <= 0 || !path || path === mount) return null
+      return { path, usedGb: kb / (1024 * 1024) }
+    })
+    .filter((e): e is SubdirEntry => e !== null)
+    .sort((a, b) => b.usedGb - a.usedGb)
+    .slice(0, 8)
 }
 
 // ── Builder ───────────────────────────────────────────────────────────────────

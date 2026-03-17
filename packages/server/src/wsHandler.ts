@@ -115,6 +115,17 @@ export function handleWSConnection(ws: WebSocket) {
         clearFingerprintPending()
       }
     }
+
+    if (msg.type === 'request_subdirs') {
+      if (!session) {
+        send({ type: 'error', payload: { message: 'Not connected to a server.' } })
+        return
+      }
+      const { mount } = msg.payload
+      session.getSubdirUsage(mount, (subdirs) => {
+        send({ type: 'subdirs_result', payload: { mount, subdirs } })
+      })
+    }
   })
 
   ws.on('close', () => {

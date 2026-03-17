@@ -88,8 +88,26 @@ export function validateConnectionConfig(payload: unknown): ValidationError[] {
   return errors
 }
 
+// Absolute path: starts with /, only word chars, dots, dashes, slashes — no ..
+const MOUNT_PATH_RE = /^\/[a-zA-Z0-9._\-/]*$/
+const MAX_MOUNT_LEN = 256
+
+export function isValidMountPath(mount: unknown): mount is string {
+  return (
+    typeof mount === 'string' &&
+    mount.length > 0 &&
+    mount.length <= MAX_MOUNT_LEN &&
+    MOUNT_PATH_RE.test(mount) &&
+    !mount.includes('..')
+  )
+}
+
 export function validateWSClientMessage(raw: unknown): raw is WSClientMessage {
   if (typeof raw !== 'object' || raw === null) return false
   const msg = raw as Record<string, unknown>
+  if (msg.type === 'request_subdirs') {
+    return typeof msg.payload === 'object' && msg.payload !== null &&
+      isValidMountPath((msg.payload as Record<string, unknown>).mount)
+  }
   return msg.type === 'connect' || msg.type === 'disconnect' || msg.type === 'fingerprint_response'
 }

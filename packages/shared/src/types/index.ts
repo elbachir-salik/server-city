@@ -1,3 +1,8 @@
+export interface SubdirEntry {
+  path: string
+  usedGb: number
+}
+
 export interface ServerMetrics {
   timestamp: number
   cpu: {
@@ -44,8 +49,10 @@ export type WSMessage =
   | { type: 'error'; payload: { message: string } }
   | { type: 'disconnected' }
   | { type: 'fingerprint_challenge'; payload: { fingerprint: string; host: string; port: number } }
+  | { type: 'subdirs_result'; payload: { mount: string; subdirs: SubdirEntry[] } }
 
 export type WSClientMessage =
   | { type: 'connect'; payload: ConnectionConfig }
   | { type: 'disconnect' }
   | { type: 'fingerprint_response'; payload: { approved: boolean } }
+  | { type: 'request_subdirs'; payload: { mount: string } }
