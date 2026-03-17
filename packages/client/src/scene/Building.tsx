@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { ServerMetrics } from '@servercity/shared'
@@ -21,13 +21,24 @@ function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3)
 }
 
+// Edge geometry for glowing building outline (computed once)
+const _edgeGeo = new THREE.EdgesGeometry(
+  new THREE.BoxGeometry(BLDG_W + 0.01, TOTAL_H + 0.01, BLDG_D + 0.01)
+)
+const _edgeMat = new THREE.LineBasicMaterial({
+  color: '#00d4ff',
+  transparent: true,
+  opacity: 0.22,
+})
+
 export function Building({ metrics, connected }: BuildingProps) {
   const groupRef = useRef<THREE.Group>(null)
-  const selectedFloor   = useServerStore(s => s.selectedFloor)
-  const subdirsByMount  = useServerStore(s => s.subdirsByMount)
+  const shellMatRef = useRef<THREE.MeshStandardMaterial>(null)
+  const edgeRef = useRef<THREE.LineSegments>(null)
+  const selectedFloor = useServerStore(s => s.selectedFloor)
+  const subdirsByMount = useServerStore(s => s.subdirsByMount)
 
   // Flatten all subdirs from every disk mount, sorted by size descending.
-  // Each gets usedPercent relative to its parent disk's total.
   // Falls back to raw disk mount entries while subdirs are still loading.
   const allSubdirs = metrics.disk
     .flatMap(disk =>
@@ -42,20 +53,25 @@ export function Building({ metrics, connected }: BuildingProps) {
     .slice(0, FLOORS)
 
   const floorData = allSubdirs.length > 0 ? allSubdirs : metrics.disk.slice(0, FLOORS)
-  const shellMatRef = useRef<THREE.MeshStandardMaterial>(null)
+
+  // Max usedGb across all floors — used to scale band heights proportionally
+  const maxUsedGb = useMemo(
+    () => Math.max(...floorData.map(f => f.usedGb), 1),
+    [floorData]
+  )
 
   // Spring state: position, velocity
   const spring = useRef({ pos: connected ? 1 : 0, vel: 0 })
   const STIFFNESS = 0.1
   const DAMPING = 0.82
 
-  const isHighCPU  = metrics.cpu.overall > 90
+  const isHighCPU = metrics.cpu.overall > 90
   const maxDiskPct = metrics.disk.reduce((m, d) => Math.max(m, d.usedPercent), 0)
-  const isDiskWarn = maxDiskPct > 70
   const isDiskCrit = maxDiskPct > 90
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return
+    const t = clock.getElapsedTime()
 
     // Spring physics for rise/sink
     const target = connected ? 1 : 0
@@ -67,35 +83,40 @@ export function Building({ metrics, connected }: BuildingProps) {
     // Apply eased scale
     groupRef.current.scale.y = easeOutCubic(newPos)
 
+    // Slow gentle oscillation (±3 degrees)
+    groupRef.current.rotation.y = Math.sin(t * 0.09) * 0.055
+
     // OOM shake — amplitude grows with severity above 95%
     const mem = metrics.memory.usedPercent
     if (mem > 95) {
-      const severity = (mem - 95) / 5  // 0→1 as mem goes 95→100%
+      const severity = (mem - 95) / 5
       const amp = 0.03 + severity * 0.06
-      groupRef.current.position.x = Math.sin(clock.getElapsedTime() * 28) * amp
+      groupRef.current.position.x = Math.sin(t * 28) * amp
     } else {
       groupRef.current.position.x = 0
     }
 
-    // Animate shell emissive — priority: CPU (red) > disk-crit (orange) > disk-warn (amber) > idle (blue)
+    // Dark glass shell stays dark — subtle edge pulse only
     if (shellMatRef.current) {
+      const baseIntensity = 0.03
       if (isHighCPU) {
-        const freq = 2 + (metrics.cpu.overall - 90) * 0.15
-        shellMatRef.current.emissiveIntensity = 0.2 + Math.abs(Math.sin(clock.getElapsedTime() * freq)) * 0.25
-        shellMatRef.current.emissive.set('#ff3300')
-      } else if (isDiskCrit) {
-        // Disk >90% — orange pulse, speed scales with fullness
-        const severity = (maxDiskPct - 90) / 10   // 0→1 as disk goes 90→100%
-        const freq = 1.5 + severity * 2.5
-        shellMatRef.current.emissiveIntensity = 0.18 + Math.abs(Math.sin(clock.getElapsedTime() * freq)) * 0.22
-        shellMatRef.current.emissive.set('#ff6600')
-      } else if (isDiskWarn) {
-        // Disk 70–90% — slow amber glow
-        shellMatRef.current.emissiveIntensity += (0.12 - shellMatRef.current.emissiveIntensity) * 0.05
-        shellMatRef.current.emissive.set('#ffaa00')
+        shellMatRef.current.emissiveIntensity = baseIntensity + Math.abs(Math.sin(t * 3)) * 0.04
       } else {
-        shellMatRef.current.emissiveIntensity += (0.05 - shellMatRef.current.emissiveIntensity) * 0.05
-        shellMatRef.current.emissive.set('#3344ff')
+        shellMatRef.current.emissiveIntensity += (baseIntensity - shellMatRef.current.emissiveIntensity) * 0.04
+      }
+    }
+
+    // Edge glow pulses with CPU / disk state
+    if (edgeRef.current) {
+      const mat = edgeRef.current.material as THREE.LineBasicMaterial
+      if (isDiskCrit || isHighCPU) {
+        const freq = isDiskCrit ? 2.5 : 3.5
+        mat.opacity = 0.25 + Math.abs(Math.sin(t * freq)) * 0.35
+        const c = isDiskCrit ? '#ff6600' : '#ff2200'
+        mat.color.set(c)
+      } else {
+        mat.opacity = 0.15 + Math.sin(t * 0.7) * 0.07
+        mat.color.set('#00d4ff')
       }
     }
   })
@@ -107,24 +128,29 @@ export function Building({ metrics, connected }: BuildingProps) {
       <CPUCorona cpuPercent={metrics.cpu.overall} />
 
       <group ref={groupRef}>
-        {/* Shell */}
+        {/* ── Dark glass shell ── */}
         <mesh position={[0, TOTAL_H / 2, 0]}>
           <boxGeometry args={[BLDG_W, TOTAL_H, BLDG_D]} />
           <meshStandardMaterial
             ref={shellMatRef}
-            color="#1a1a2e"
-            emissive="#3344ff"
-            emissiveIntensity={0.05}
+            color="#08081a"
+            emissive="#001133"
+            emissiveIntensity={0.03}
             transparent
-            opacity={0.92}
+            opacity={0.82}
+            metalness={0.55}
+            roughness={0.18}
           />
         </mesh>
 
-        {/* Floor separators */}
-        {Array.from({ length: FLOORS }).map((_, i) => (
+        {/* ── Glowing edge lines ── */}
+        <lineSegments ref={edgeRef} position={[0, TOTAL_H / 2, 0]} geometry={_edgeGeo} material={_edgeMat} />
+
+        {/* ── Thin cyan floor separator lines ── */}
+        {Array.from({ length: FLOORS + 1 }).map((_, i) => (
           <mesh key={i} position={[0, i * FLOOR_H, 0]}>
-            <boxGeometry args={[BLDG_W + 0.02, 0.04, BLDG_D + 0.02]} />
-            <meshStandardMaterial color="#4a4a8e" emissive="#5a5aae" emissiveIntensity={0.35} />
+            <boxGeometry args={[BLDG_W + 0.04, 0.022, BLDG_D + 0.04]} />
+            <meshStandardMaterial color="#00d4ff" emissive="#00d4ff" emissiveIntensity={0.65} />
           </mesh>
         ))}
 
@@ -135,7 +161,13 @@ export function Building({ metrics, connected }: BuildingProps) {
         />
 
         {Array.from({ length: FLOORS }).map((_, i) => (
-          <DiskFloor key={i} disk={floorData[i] ?? null} floor={i} selected={selectedFloor === i} />
+          <DiskFloor
+            key={i}
+            disk={floorData[i] ?? null}
+            floor={i}
+            maxUsedGb={maxUsedGb}
+            selected={selectedFloor === i}
+          />
         ))}
 
         {Array.from({ length: FLOORS }).map((_, i) => (

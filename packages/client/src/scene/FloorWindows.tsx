@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { BLDG_D, BLDG_W, FLOOR_H } from './constants'
@@ -8,122 +8,177 @@ export interface FloorWindowsProps {
   floor: number
 }
 
-// Pre-allocated to avoid per-frame GC
-const _hotA = new THREE.Color('#ff6600')
-const _hotB = new THREE.Color('#ff0000')
-const _tmp = new THREE.Color()
+// Pre-allocated color cache
+const _off   = new THREE.Color('#0d1a2e')
+const _dim   = new THREE.Color('#a8c4e8')
+const _white = new THREE.Color('#e8f4ff')
+const _amber = new THREE.Color('#f59e0b')
+const _red   = new THREE.Color('#ef4444')
+const _tmp   = new THREE.Color()
 
-// ── Single animated window pane ──────────────────────────────────────────────
-interface WindowPaneProps {
+function windowColor(cpuPercent: number): THREE.Color {
+  if (cpuPercent >= 90) return _red
+  if (cpuPercent >= 80) return _amber
+  if (cpuPercent >= 50) return _white
+  return _dim
+}
+
+// Small glowing window pane
+interface PaneProps {
   position: [number, number, number]
   rotation: [number, number, number]
-  paneWidth: number
   lit: boolean
   cpuPercent: number
-  /** Phase offset so each window flickers independently */
   phase: number
 }
 
-function WindowPane({ position, rotation, paneWidth, lit, cpuPercent, phase }: WindowPaneProps) {
+function Pane({ position, rotation, lit, cpuPercent, phase }: PaneProps) {
   const matRef = useRef<THREE.MeshStandardMaterial>(null)
   const isHot = cpuPercent > 90
+  const isWarm = cpuPercent > 80
 
   useFrame(({ clock }) => {
     const mat = matRef.current
-    if (!mat || !lit) return
+    if (!mat) return
+    if (!lit) return
     const t = clock.getElapsedTime()
 
     if (isHot) {
-      // Cycle between orange and red, each window offset by phase
-      const cycle = Math.sin(t * 8 + phase) * 0.5 + 0.5
-      _tmp.lerpColors(_hotA, _hotB, cycle)
+      // Red flicker — each window independently
+      const flicker = Math.abs(Math.sin(t * 12 + phase))
+      _tmp.lerpColors(_amber, _red, flicker)
       mat.color.copy(_tmp)
       mat.emissive.copy(_tmp)
-      mat.emissiveIntensity = 1.5 + cycle * 1.5
+      mat.emissiveIntensity = 1.8 + flicker * 1.4
+    } else if (isWarm) {
+      mat.emissiveIntensity = 1.4 + Math.sin(t * 3 + phase) * 0.3
     } else {
-      // Subtle gentle shimmer for normal-load windows
-      mat.emissiveIntensity = 1.1 + Math.sin(t * 1.5 + phase) * 0.1
+      // Subtle shimmer
+      mat.emissiveIntensity = 0.9 + Math.sin(t * 1.2 + phase) * 0.15
     }
   })
 
+  const col = lit ? windowColor(cpuPercent) : _off
   return (
     <mesh position={position} rotation={rotation}>
-      <planeGeometry args={[paneWidth - 0.08, FLOOR_H * 0.45]} />
+      <planeGeometry args={[0.19, 0.22]} />
       <meshStandardMaterial
         ref={matRef}
-        color={lit ? '#fffbe6' : '#111'}
-        emissive={lit ? '#ffd700' : '#000'}
-        emissiveIntensity={lit ? 1.2 : 0}
+        color={col}
+        emissive={col}
+        emissiveIntensity={lit ? 0.9 : 0}
+        depthWrite={false}
       />
     </mesh>
   )
 }
 
-// ── One floor's worth of windows on all four faces ───────────────────────────
-const FRONT_COLS = 6
-const SIDE_COLS = 3
-const WIN_W_FRONT = BLDG_W / FRONT_COLS
-const WIN_W_SIDE = BLDG_D / SIDE_COLS
+// Grid layout: COLS columns × ROWS rows per face
+const FRONT_COLS = 9
+const SIDE_COLS  = 4
+const ROWS       = 2
+const TOTAL_FRONT = FRONT_COLS * ROWS
+const TOTAL_SIDE  = SIDE_COLS * ROWS
+
+// Column/row spacings
+const COL_STEP_F = BLDG_W / (FRONT_COLS + 1)
+const COL_STEP_S = BLDG_D / (SIDE_COLS + 1)
+const ROW_STEP   = FLOOR_H / (ROWS + 1)
+const FACE_OFFSET = 0.012  // slightly proud of the shell face
 
 export function FloorWindows({ cpuPercent, floor }: FloorWindowsProps) {
-  const litFront = Math.round((cpuPercent / 100) * FRONT_COLS)
-  const litSide = Math.round((cpuPercent / 100) * SIDE_COLS)
-  const y = floor * FLOOR_H + FLOOR_H * 0.5
-  const fp = floor * 100 // base phase offset per floor
+  const baseY = floor * FLOOR_H
 
-  return (
-    <>
-      {/* Front face (+Z) */}
-      {Array.from({ length: FRONT_COLS }).map((_, i) => (
-        <WindowPane
-          key={`f${i}`}
-          position={[(i - (FRONT_COLS - 1) / 2) * WIN_W_FRONT, y, BLDG_D / 2 + 0.01]}
+  const litFront = Math.round((cpuPercent / 100) * TOTAL_FRONT)
+  const litSide  = Math.round((cpuPercent / 100) * TOTAL_SIDE)
+
+  // Stable random phase offsets per window (memoized)
+  const phases = useMemo(() => {
+    const arr: number[] = []
+    // front+back = TOTAL_FRONT * 2, sides = TOTAL_SIDE * 2
+    const total = TOTAL_FRONT * 2 + TOTAL_SIDE * 2
+    for (let i = 0; i < total; i++) arr.push((floor * 97 + i * 13.7) % (Math.PI * 2))
+    return arr
+  }, [floor])
+
+  let phaseIdx = 0
+  const panes: JSX.Element[] = []
+
+  // ── Front face (+Z) ──────────────────────────────────────────────────────
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < FRONT_COLS; c++) {
+      const idx = r * FRONT_COLS + c
+      const x = -BLDG_W / 2 + (c + 1) * COL_STEP_F
+      const y = baseY + (r + 1) * ROW_STEP
+      panes.push(
+        <Pane
+          key={`f-${r}-${c}`}
+          position={[x, y, BLDG_D / 2 + FACE_OFFSET]}
           rotation={[0, 0, 0]}
-          paneWidth={WIN_W_FRONT}
-          lit={i < litFront}
+          lit={idx < litFront}
           cpuPercent={cpuPercent}
-          phase={fp + i * 0.4}
+          phase={phases[phaseIdx++]}
         />
-      ))}
+      )
+    }
+  }
 
-      {/* Back face (−Z) */}
-      {Array.from({ length: FRONT_COLS }).map((_, i) => (
-        <WindowPane
-          key={`b${i}`}
-          position={[(i - (FRONT_COLS - 1) / 2) * WIN_W_FRONT, y, -(BLDG_D / 2 + 0.01)]}
+  // ── Back face (−Z) ───────────────────────────────────────────────────────
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < FRONT_COLS; c++) {
+      const idx = r * FRONT_COLS + c
+      const x = BLDG_W / 2 - (c + 1) * COL_STEP_F
+      const y = baseY + (r + 1) * ROW_STEP
+      panes.push(
+        <Pane
+          key={`b-${r}-${c}`}
+          position={[x, y, -(BLDG_D / 2 + FACE_OFFSET)]}
           rotation={[0, Math.PI, 0]}
-          paneWidth={WIN_W_FRONT}
-          lit={i < litFront}
+          lit={idx < litFront}
           cpuPercent={cpuPercent}
-          phase={fp + i * 0.4 + 0.2}
+          phase={phases[phaseIdx++]}
         />
-      ))}
+      )
+    }
+  }
 
-      {/* Left face (−X) */}
-      {Array.from({ length: SIDE_COLS }).map((_, i) => (
-        <WindowPane
-          key={`l${i}`}
-          position={[-(BLDG_W / 2 + 0.01), y, (i - (SIDE_COLS - 1) / 2) * WIN_W_SIDE]}
+  // ── Left face (−X) ───────────────────────────────────────────────────────
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < SIDE_COLS; c++) {
+      const idx = r * SIDE_COLS + c
+      const z = -BLDG_D / 2 + (c + 1) * COL_STEP_S
+      const y = baseY + (r + 1) * ROW_STEP
+      panes.push(
+        <Pane
+          key={`l-${r}-${c}`}
+          position={[-(BLDG_W / 2 + FACE_OFFSET), y, z]}
           rotation={[0, -Math.PI / 2, 0]}
-          paneWidth={WIN_W_SIDE}
-          lit={i < litSide}
+          lit={idx < litSide}
           cpuPercent={cpuPercent}
-          phase={fp + i * 0.5 + 50}
+          phase={phases[phaseIdx++]}
         />
-      ))}
+      )
+    }
+  }
 
-      {/* Right face (+X) */}
-      {Array.from({ length: SIDE_COLS }).map((_, i) => (
-        <WindowPane
-          key={`r${i}`}
-          position={[BLDG_W / 2 + 0.01, y, (i - (SIDE_COLS - 1) / 2) * WIN_W_SIDE]}
+  // ── Right face (+X) ──────────────────────────────────────────────────────
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < SIDE_COLS; c++) {
+      const idx = r * SIDE_COLS + c
+      const z = BLDG_D / 2 - (c + 1) * COL_STEP_S
+      const y = baseY + (r + 1) * ROW_STEP
+      panes.push(
+        <Pane
+          key={`r-${r}-${c}`}
+          position={[BLDG_W / 2 + FACE_OFFSET, y, z]}
           rotation={[0, Math.PI / 2, 0]}
-          paneWidth={WIN_W_SIDE}
-          lit={i < litSide}
+          lit={idx < litSide}
           cpuPercent={cpuPercent}
-          phase={fp + i * 0.5 + 51}
+          phase={phases[phaseIdx++]}
         />
-      ))}
-    </>
-  )
+      )
+    }
+  }
+
+  return <>{panes}</>
 }
