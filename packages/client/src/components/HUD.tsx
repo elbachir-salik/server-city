@@ -16,68 +16,51 @@ function formatBytes(bytes: number): string {
   return `${bytes} B/s`
 }
 
-// ── Sparkline SVG polyline ────────────────────────────────────────────────────
-function Sparkline({ data, width = 60, height = 16, color }: { data: number[]; width?: number; height?: number; color: string }) {
+// ── Sparkline SVG ─────────────────────────────────────────────────────────────
+function Sparkline({ data, width = 52, height = 14, color }: { data: number[]; width?: number; height?: number; color: string }) {
   if (data.length < 2) return null
   const max = Math.max(...data, 1)
   const pts = data
-    .map((v, i) => {
-      const x = (i / (data.length - 1)) * width
-      const y = height - (v / max) * height
-      return `${x.toFixed(1)},${y.toFixed(1)}`
-    })
+    .map((v, i) => `${((i / (data.length - 1)) * width).toFixed(1)},${(height - (v / max) * height).toFixed(1)}`)
     .join(' ')
-
   return (
-    <svg width={width} height={height} style={{ display: 'block', opacity: 0.7 }}>
+    <svg width={width} height={height} style={{ display: 'block', opacity: 0.65 }}>
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   )
 }
 
-// ── Pulsing vignette that appears at memory danger thresholds ────────────────
+// ── OOM screen-edge vignette ──────────────────────────────────────────────────
 function OOMVignette({ memPercent }: { memPercent: number }) {
-  const vignetteRef = useRef<HTMLDivElement>(null)
-  const frameRef = useRef<number>(0)
+  const ref = useRef<HTMLDivElement>(null)
+  const frameRef = useRef(0)
   const phaseRef = useRef(0)
 
   useEffect(() => {
-    const el = vignetteRef.current
+    const el = ref.current
     if (!el) return
-
     const animate = () => {
       phaseRef.current += 0.04
       const t = Math.sin(phaseRef.current)
-
       if (memPercent >= 95) {
-        const alpha = 0.18 + Math.abs(t) * 0.22
-        el.style.boxShadow = `inset 0 0 120px 40px rgba(220,38,38,${alpha})`
+        el.style.boxShadow = `inset 0 0 120px 40px rgba(220,38,38,${0.18 + Math.abs(t) * 0.22})`
         el.style.opacity = '1'
       } else if (memPercent >= 85) {
-        const alpha = 0.06 + Math.abs(t) * 0.08
-        el.style.boxShadow = `inset 0 0 100px 30px rgba(251,146,60,${alpha})`
+        el.style.boxShadow = `inset 0 0 100px 30px rgba(168,85,247,${0.07 + Math.abs(t) * 0.08})`
         el.style.opacity = '1'
       } else {
         el.style.opacity = '0'
       }
-
       frameRef.current = requestAnimationFrame(animate)
     }
-
     frameRef.current = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(frameRef.current)
   }, [memPercent])
 
-  return (
-    <div
-      ref={vignetteRef}
-      className="absolute inset-0 pointer-events-none z-20 transition-opacity duration-700"
-      style={{ opacity: 0 }}
-    />
-  )
+  return <div ref={ref} className="absolute inset-0 pointer-events-none z-20 transition-opacity duration-700" style={{ opacity: 0 }} />
 }
 
-// ── Single metric card ───────────────────────────────────────────────────────
+// ── Compact metric card ───────────────────────────────────────────────────────
 interface MetricCardProps {
   label: string
   value: string
@@ -90,79 +73,97 @@ interface MetricCardProps {
 }
 
 function MetricCard({ label, value, sub, percent, danger, warn, sparkData, sparkColor }: MetricCardProps) {
-  const barColor = danger ? 'bg-red-500' : warn ? 'bg-amber-400' : 'bg-indigo-400'
-  const borderColor = danger ? 'border-red-500/50' : warn ? 'border-amber-400/40' : 'border-city-border'
-  const valueColor = danger ? 'text-red-400' : warn ? 'text-amber-400' : 'text-white'
+  const barColor  = danger ? '#ef4444' : warn ? '#f59e0b' : '#6366f1'
+  const textColor = danger ? '#fca5a5' : warn ? '#fcd34d' : '#e2e8f0'
 
   return (
-    <div className={`bg-black/50 border ${borderColor} rounded-lg px-3 py-2 min-w-[105px]`}>
-      <div className="flex items-center justify-between mb-0.5">
-        <div className="text-gray-400 text-xs">{label}</div>
+    <div style={{
+      background: 'rgba(6,6,18,0.88)',
+      border: `1px solid ${danger ? 'rgba(239,68,68,0.3)' : warn ? 'rgba(245,158,11,0.25)' : 'rgba(99,102,241,0.18)'}`,
+      borderRadius: 8,
+      padding: '7px 11px',
+      minWidth: 88,
+      backdropFilter: 'blur(8px)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+        <span style={{ color: '#6b7280', fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</span>
         {sparkData && sparkColor && <Sparkline data={sparkData} color={sparkColor} />}
       </div>
-      <div className={`font-bold text-sm ${valueColor}`}>{value}</div>
-      {sub && <div className="text-gray-500 text-xs">{sub}</div>}
+      <div style={{ color: textColor, fontWeight: 700, fontSize: 15, fontFamily: 'monospace', lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ color: '#4b5563', fontSize: 9, marginTop: 2 }}>{sub}</div>}
       {percent !== undefined && (
-        <div className="mt-1.5 h-1 rounded-full bg-white/10 overflow-hidden">
-          <div
-            className={`h-full rounded-full ${barColor} transition-all duration-700`}
-            style={{ width: `${Math.min(100, percent)}%` }}
-          />
+        <div style={{ marginTop: 5, height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 1, overflow: 'hidden' }}>
+          <div style={{ width: `${Math.min(100, percent)}%`, height: '100%', background: barColor, borderRadius: 1, transition: 'width 0.6s ease' }} />
         </div>
       )}
     </div>
   )
 }
 
-// ── Shortcuts legend overlay ──────────────────────────────────────────────────
+// ── Shortcuts overlay ─────────────────────────────────────────────────────────
 function ShortcutsLegend({ onClose }: { onClose: () => void }) {
   const shortcuts = [
-    { key: 'R', desc: 'Reset camera view' },
+    { key: 'R', desc: 'Reset camera' },
     { key: 'D', desc: 'Toggle disk sidebar' },
+    { key: 'P', desc: 'Toggle process panel' },
     { key: '1–5', desc: 'Select floor' },
-    { key: 'Esc', desc: 'Deselect floor' },
+    { key: 'Esc', desc: 'Deselect / close' },
   ]
-
   return (
-    <div
-      className="absolute inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.6)' }}
-      onClick={onClose}
-    >
-      <div
-        className="bg-city-panel border border-city-border rounded-xl px-6 py-5 backdrop-blur min-w-[220px]"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="absolute inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={onClose}>
+      <div className="bg-city-panel border border-city-border rounded-xl px-6 py-5 backdrop-blur min-w-[200px]" onClick={e => e.stopPropagation()}>
         <div className="text-white font-semibold text-sm mb-3">Keyboard Shortcuts</div>
         {shortcuts.map(({ key, desc }) => (
           <div key={key} className="flex items-center gap-3 mb-2">
-            <kbd className="bg-black/60 border border-gray-600 rounded px-2 py-0.5 text-xs font-mono text-gray-200 min-w-[36px] text-center">
-              {key}
-            </kbd>
+            <kbd className="bg-black/60 border border-gray-600 rounded px-2 py-0.5 text-xs font-mono text-gray-200 min-w-[36px] text-center">{key}</kbd>
             <span className="text-gray-400 text-xs">{desc}</span>
           </div>
         ))}
-        <button
-          onClick={onClose}
-          className="mt-3 text-gray-600 hover:text-gray-400 text-xs w-full text-center transition-colors"
-        >
-          Close
-        </button>
+        <button onClick={onClose} className="mt-3 text-gray-600 hover:text-gray-400 text-xs w-full text-center transition-colors">Close</button>
       </div>
     </div>
   )
 }
 
+// ── Icon button ───────────────────────────────────────────────────────────────
+function IconBtn({ onClick, title, active, children }: { onClick: () => void; title: string; active?: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        background: active ? 'rgba(99,102,241,0.2)' : 'rgba(6,6,18,0.88)',
+        border: `1px solid ${active ? 'rgba(99,102,241,0.5)' : 'rgba(99,102,241,0.18)'}`,
+        borderRadius: 8,
+        width: 34,
+        height: 34,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        color: active ? '#a5b4fc' : '#6b7280',
+        fontSize: 13,
+        transition: 'all 0.2s',
+        backdropFilter: 'blur(8px)',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
 // ── Main HUD ─────────────────────────────────────────────────────────────────
 export function HUD({ onDisconnect, onReconnect }: Props) {
-  const { status, hostname, metrics: rawMetrics, metricsStale, retryAttempt, retryCountdown, resetCamera } = useServerStore()
+  const {
+    status, hostname, metrics: rawMetrics, metricsStale, retryAttempt, retryCountdown,
+    resetCamera, serverInfo, processPanelVisible, toggleProcessPanel,
+  } = useServerStore()
   const metrics = useLerpedMetrics(rawMetrics)
   const secondsAgo = useLastUpdated(rawMetrics)
   const [showShortcuts, setShowShortcuts] = useState(false)
 
   const cpuPct = metrics?.cpu.overall ?? 0
   const memPct = metrics?.memory.usedPercent ?? 0
-
   const cpuHistory = useMetricHistory(cpuPct)
   const memHistory = useMetricHistory(memPct)
 
@@ -170,19 +171,11 @@ export function HUD({ onDisconnect, onReconnect }: Props) {
   const isMemWarn = memPct >= 85 && !isOOM
   const isCPUWarn = cpuPct >= 90
 
-  const statusColor =
-    status === 'connected'
-      ? 'bg-green-400'
-      : status === 'disconnected'
-        ? 'bg-red-400'
-        : 'bg-yellow-400'
+  const statusColor = status === 'connected' ? '#4ade80' : status === 'disconnected' ? '#f87171' : '#fbbf24'
 
   return (
     <>
-      {/* OOM screen-edge vignette */}
       {metrics && <OOMVignette memPercent={memPct} />}
-
-      {/* Shortcuts overlay */}
       {showShortcuts && <ShortcutsLegend onClose={() => setShowShortcuts(false)} />}
 
       {/* Critical memory banner */}
@@ -194,51 +187,73 @@ export function HUD({ onDisconnect, onReconnect }: Props) {
         </div>
       )}
 
-      {/* Top-left: hostname + status */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-city-panel border border-city-border rounded-xl px-4 py-2.5 backdrop-blur">
-        <span className={`w-2 h-2 rounded-full ${statusColor} animate-pulse`} />
-        <span className="text-white font-semibold text-sm">{hostname || 'ServerCity'}</span>
-        {secondsAgo !== null && status === 'connected' && (
-          <span className={`text-xs ml-2 tabular-nums ${metricsStale ? 'text-red-400 animate-pulse' : secondsAgo > 4 ? 'text-yellow-400' : 'text-gray-500'}`}>
-            {metricsStale ? `stale · ${secondsAgo}s ago` : `${secondsAgo}s ago`}
+      {/* ── Top-left: status pill ── */}
+      <div style={{
+        position: 'absolute', top: 14, left: 14, zIndex: 10,
+        display: 'flex', flexDirection: 'column', gap: 4,
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: 'rgba(6,6,18,0.88)', border: '1px solid rgba(99,102,241,0.18)',
+          borderRadius: 10, padding: '8px 14px', backdropFilter: 'blur(8px)',
+        }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor, boxShadow: `0 0 6px ${statusColor}`, flexShrink: 0 }} />
+          <span style={{ color: '#e2e8f0', fontWeight: 600, fontSize: 13, fontFamily: 'monospace' }}>
+            {hostname || 'ServerCity'}
           </span>
+          {secondsAgo !== null && status === 'connected' && (
+            <span style={{ fontSize: 10, color: metricsStale ? '#f87171' : secondsAgo > 4 ? '#fbbf24' : '#4b5563', fontFamily: 'monospace' }}>
+              {metricsStale ? `stale·${secondsAgo}s` : `${secondsAgo}s`}
+            </span>
+          )}
+        </div>
+
+        {/* Server info — kernel/uptime */}
+        {serverInfo && status === 'connected' && (
+          <div style={{
+            background: 'rgba(6,6,18,0.75)', border: '1px solid rgba(99,102,241,0.10)',
+            borderRadius: 7, padding: '4px 10px', backdropFilter: 'blur(6px)',
+          }}>
+            <div style={{ color: '#4b5563', fontSize: 9, fontFamily: 'monospace', lineHeight: 1.7 }}>
+              {serverInfo.os} {serverInfo.kernel && `· ${serverInfo.kernel}`}
+              {serverInfo.uptime && <><br />{serverInfo.uptime}</>}
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Top-right: controls */}
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-        {/* Shortcuts help */}
-        <button
-          onClick={() => setShowShortcuts(true)}
-          title="Keyboard shortcuts"
-          className="bg-city-panel border border-city-border rounded-xl w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white hover:border-gray-500 text-sm transition-colors backdrop-blur"
-        >
-          ?
-        </button>
-
-        {/* Camera reset — only when connected */}
+      {/* ── Top-right: action buttons ── */}
+      <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 10, display: 'flex', gap: 6 }}>
+        <IconBtn onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts">?</IconBtn>
         {status === 'connected' && (
-          <button
-            onClick={resetCamera}
-            title="Reset camera view (R)"
-            className="bg-city-panel border border-city-border rounded-xl px-3 py-2 text-gray-400 hover:text-white hover:border-indigo-500/50 text-sm transition-colors backdrop-blur"
-          >
-            ⟳
-          </button>
-        )}
-
-        {/* Disconnect */}
-        {status === 'connected' && (
-          <button
-            onClick={onDisconnect}
-            className="bg-city-panel border border-city-border rounded-xl px-4 py-2 text-gray-400 hover:text-white hover:border-red-500/50 text-sm transition-colors backdrop-blur"
-          >
-            Disconnect
-          </button>
+          <>
+            <IconBtn onClick={resetCamera} title="Reset camera (R)">⟳</IconBtn>
+            <IconBtn onClick={toggleProcessPanel} title="Process panel (P)" active={processPanelVisible}>⚙</IconBtn>
+            <button
+              onClick={onDisconnect}
+              style={{
+                background: 'rgba(6,6,18,0.88)',
+                border: '1px solid rgba(239,68,68,0.25)',
+                borderRadius: 8,
+                padding: '0 14px',
+                height: 34,
+                cursor: 'pointer',
+                color: '#9ca3af',
+                fontSize: 12,
+                fontFamily: 'monospace',
+                transition: 'all 0.2s',
+                backdropFilter: 'blur(8px)',
+              }}
+              onMouseEnter={e => { (e.target as HTMLElement).style.color = '#fca5a5'; (e.target as HTMLElement).style.borderColor = 'rgba(239,68,68,0.5)' }}
+              onMouseLeave={e => { (e.target as HTMLElement).style.color = '#9ca3af'; (e.target as HTMLElement).style.borderColor = 'rgba(239,68,68,0.25)' }}
+            >
+              Disconnect
+            </button>
+          </>
         )}
       </div>
 
-      {/* Auto-retry countdown banner */}
+      {/* ── Reconnecting overlay ── */}
       {status === 'reconnecting' && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-center">
           <div className="bg-city-panel border border-amber-500/40 rounded-xl px-8 py-6 backdrop-blur min-w-[260px]">
@@ -248,52 +263,35 @@ export function HUD({ onDisconnect, onReconnect }: Props) {
               <span className="text-gray-500 ml-2">(attempt {retryAttempt}/3)</span>
             </div>
             <div className="h-1 rounded-full bg-white/10 mb-4 overflow-hidden">
-              <div
-                className="h-full bg-amber-400 rounded-full transition-all duration-1000"
-                style={{ width: `${((3 - retryCountdown) / 3) * 100}%` }}
-              />
+              <div className="h-full bg-amber-400 rounded-full transition-all duration-1000" style={{ width: `${((3 - retryCountdown) / 3) * 100}%` }} />
             </div>
-            <button
-              onClick={onDisconnect}
-              className="text-gray-500 hover:text-gray-300 text-xs transition-colors"
-            >
-              Cancel
-            </button>
+            <button onClick={onDisconnect} className="text-gray-500 hover:text-gray-300 text-xs transition-colors">Cancel</button>
           </div>
         </div>
       )}
 
-      {/* Manual reconnect overlay (after retries exhausted or server-side disconnect) */}
+      {/* ── Disconnected overlay ── */}
       {status === 'disconnected' && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 text-center">
           <div className="bg-city-panel border border-city-border rounded-xl px-8 py-6 backdrop-blur min-w-[260px]">
             <div className="text-red-400 font-semibold mb-1">Disconnected</div>
             <div className="text-gray-400 text-sm mb-4">
-              {retryAttempt > 0
-                ? `Auto-retry failed after ${retryAttempt} attempt${retryAttempt > 1 ? 's' : ''}.`
-                : 'The server disconnected.'}
+              {retryAttempt > 0 ? `Auto-retry failed after ${retryAttempt} attempt${retryAttempt > 1 ? 's' : ''}.` : 'The server disconnected.'}
             </div>
             <div className="flex gap-2 justify-center">
-              <button
-                onClick={onReconnect}
-                className="bg-city-accent hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-              >
-                Reconnect
-              </button>
-              <button
-                onClick={onDisconnect}
-                className="bg-transparent border border-gray-700 hover:border-gray-500 text-gray-400 hover:text-white rounded-lg px-4 py-2 text-sm transition-colors"
-              >
-                Back
-              </button>
+              <button onClick={onReconnect} className="bg-city-accent hover:bg-indigo-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors">Reconnect</button>
+              <button onClick={onDisconnect} className="bg-transparent border border-gray-700 hover:border-gray-500 text-gray-400 hover:text-white rounded-lg px-4 py-2 text-sm transition-colors">Back</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Bottom metric cards */}
+      {/* ── Bottom metric bar ── */}
       {metrics && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex gap-2 flex-wrap justify-center px-4">
+        <div style={{
+          position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 10, display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', padding: '0 8px',
+        }}>
           <MetricCard
             label="CPU"
             value={`${cpuPct.toFixed(1)}%`}
@@ -305,12 +303,12 @@ export function HUD({ onDisconnect, onReconnect }: Props) {
           <MetricCard
             label="Memory"
             value={`${memPct.toFixed(1)}%`}
-            sub={`${metrics.memory.usedMb} / ${metrics.memory.totalMb} MB`}
+            sub={`${metrics.memory.usedMb}/${metrics.memory.totalMb} MB`}
             percent={memPct}
             danger={isOOM}
             warn={isMemWarn}
             sparkData={memHistory}
-            sparkColor={isOOM ? '#f87171' : isMemWarn ? '#fb923c' : '#60a5fa'}
+            sparkColor={isOOM ? '#f87171' : isMemWarn ? '#c084fc' : '#60a5fa'}
           />
           {metrics.swap && metrics.swap.totalMb > 0 && (
             <MetricCard
@@ -322,19 +320,19 @@ export function HUD({ onDisconnect, onReconnect }: Props) {
               danger={(metrics.swap.usedMb / metrics.swap.totalMb) > 0.85}
             />
           )}
-          {metrics.disk.slice(0, 2).map((d) => (
+          {metrics.disk.slice(0, 2).map(d => (
             <MetricCard
               key={d.mount}
               label={`Disk ${d.mount}`}
               value={`${d.usedPercent}%`}
-              sub={`${d.usedGb.toFixed(1)} / ${d.totalGb.toFixed(1)} GB`}
+              sub={`${d.usedGb.toFixed(1)}/${d.totalGb.toFixed(1)} GB`}
               percent={d.usedPercent}
               danger={d.usedPercent > 90}
               warn={d.usedPercent > 70}
             />
           ))}
-          <MetricCard label="Net In" value={formatBytes(metrics.network.bytesIn)} />
-          <MetricCard label="Net Out" value={formatBytes(metrics.network.bytesOut)} />
+          <MetricCard label="↓ In" value={formatBytes(metrics.network.bytesIn)} />
+          <MetricCard label="↑ Out" value={formatBytes(metrics.network.bytesOut)} />
         </div>
       )}
     </>

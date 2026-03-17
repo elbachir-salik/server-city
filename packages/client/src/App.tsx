@@ -1,25 +1,48 @@
 import { useServerStore } from './store/useServerStore'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { useAlerts } from './hooks/useAlerts'
 import { ConnectForm } from './components/ConnectForm'
 import { Scene } from './components/Scene'
 import { HUD } from './components/HUD'
 import { FingerprintModal } from './components/FingerprintModal'
 import { HttpWarningBanner } from './components/HttpWarningBanner'
-import { DiskSidebar } from './components/DiskSidebar'
+import { FloorDetailPanel } from './components/FloorDetailPanel'
+import { AlertToast } from './components/AlertToast'
+import { ProcessPanel } from './components/ProcessPanel'
 import { ConnectionConfig } from '@servercity/shared'
 
 export default function App() {
-  const { status, metrics, errorMessage, reset, fingerprintChallenge, diskSidebarVisible } = useServerStore()
-  const { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs } = useWebSocket()
+  const { status, metrics, errorMessage, reset, fingerprintChallenge } = useServerStore()
+  const { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs } = useWebSocket()
   useKeyboardShortcuts()
+  useAlerts(metrics)
 
-  const isConnected = status === 'connected'
+  const isConnected  = status === 'connected'
   const isConnecting = status === 'connecting'
-  const showForm = status === 'idle' || status === 'error' || status === 'connecting'
-  const showScene = !showForm || isConnecting
-  // Show HUD whenever the scene is visible and we're past the initial connecting state
-  const showHUD = isConnected || status === 'disconnected' || status === 'reconnecting'
+  const showForm     = status === 'idle' || status === 'error' || status === 'connecting'
+  const showScene    = !showForm || isConnecting
+  const showHUD      = isConnected || status === 'disconnected' || status === 'reconnecting'
+
+  // Build floorData for the detail panel (same logic as Building.tsx)
+  const subdirsByMount = useServerStore(s => s.subdirsByMount)
+  const allSubdirs = metrics
+    ? metrics.disk
+        .flatMap(disk =>
+          (subdirsByMount[disk.mount] ?? []).map(sub => ({
+            mount: sub.path,
+            usedGb: sub.usedGb,
+            totalGb: disk.totalGb,
+            usedPercent: Math.min(100, Math.round((sub.usedGb / disk.totalGb) * 100)),
+          }))
+        )
+        .sort((a, b) => b.usedGb - a.usedGb)
+        .slice(0, 5)
+    : []
+
+  const floorData = allSubdirs.length > 0
+    ? allSubdirs
+    : (metrics?.disk.slice(0, 5) ?? [])
 
   const handleConnect = (config: ConnectionConfig) => connect(config)
   const handleDisconnect = () => { disconnect(); reset() }
@@ -29,7 +52,6 @@ export default function App() {
     <div className="w-full h-full relative">
       <HttpWarningBanner />
 
-      {/* TOFU fingerprint modal — blocks SSH handshake until user decides */}
       {fingerprintChallenge && (
         <FingerprintModal
           challenge={fingerprintChallenge}
@@ -37,19 +59,25 @@ export default function App() {
           onReject={() => sendFingerprintResponse(false)}
         />
       )}
-      {/* 3D scene — mounts as soon as connecting starts */}
+
+      {/* 3D scene */}
       <div
         className="absolute inset-0 transition-opacity duration-700"
         style={{ opacity: showScene ? 1 : 0, pointerEvents: showScene ? 'auto' : 'none' }}
       >
         <Scene metrics={metrics} connected={isConnected} isConnecting={isConnecting} />
+
         {showHUD && (
-          <HUD onDisconnect={handleDisconnect} onReconnect={handleReconnect} />
+          <>
+            <HUD onDisconnect={handleDisconnect} onReconnect={handleReconnect} />
+            <FloorDetailPanel floorData={floorData} onRequestSubdirs={requestSubdirs} />
+            <ProcessPanel onRequestPs={requestPs} />
+            <AlertToast />
+          </>
         )}
-        {showHUD && diskSidebarVisible && <DiskSidebar onRequestSubdirs={requestSubdirs} />}
       </div>
 
-      {/* Connect form — fades out when scene takes over */}
+      {/* Connect form */}
       <div
         className="absolute inset-0 transition-opacity duration-700"
         style={{ opacity: showForm ? 1 : 0, pointerEvents: showForm ? 'auto' : 'none' }}

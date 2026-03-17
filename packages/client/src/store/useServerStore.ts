@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { ServerMetrics, ConnectionConfig, SubdirEntry } from '@servercity/shared'
+import { ServerMetrics, ConnectionConfig, SubdirEntry, ProcessEntry, ServerInfo } from '@servercity/shared'
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error'
 
@@ -19,6 +19,12 @@ export interface SavedConnection {
   host: string
   port: number
   username: string
+}
+
+export interface Alert {
+  id: string
+  message: string
+  timestamp: number
 }
 
 const SAVED_KEY = 'servercity:connections'
@@ -44,14 +50,18 @@ interface ServerStore {
   metricsStale: boolean
   errorMessage: string
   lastConfig: SafeConfig | null
-  retryAttempt: number       // 0 = not retrying
-  retryCountdown: number     // seconds until next retry
+  retryAttempt: number
+  retryCountdown: number
   fingerprintChallenge: FingerprintChallenge | null
   selectedFloor: number | null
   subdirsByMount: Record<string, SubdirEntry[]>
   cameraResetToken: number
   diskSidebarVisible: boolean
   savedConnections: SavedConnection[]
+  processes: ProcessEntry[]
+  serverInfo: ServerInfo | null
+  alertLog: Alert[]
+  processPanelVisible: boolean
 
   setStatus: (s: ConnectionStatus) => void
   setHostname: (h: string) => void
@@ -67,6 +77,11 @@ interface ServerStore {
   toggleDiskSidebar: () => void
   saveConnection: (cfg: SavedConnection) => void
   deleteConnection: (id: string) => void
+  setProcesses: (p: ProcessEntry[]) => void
+  setServerInfo: (info: ServerInfo) => void
+  addAlert: (a: Alert) => void
+  removeAlert: (id: string) => void
+  toggleProcessPanel: () => void
   reset: () => void
 }
 
@@ -83,8 +98,12 @@ export const useServerStore = create<ServerStore>((set) => ({
   selectedFloor: null,
   subdirsByMount: {},
   cameraResetToken: 0,
-  diskSidebarVisible: true,
+  diskSidebarVisible: false,   // off by default — floor info via 3D click
   savedConnections: loadSaved(),
+  processes: [],
+  serverInfo: null,
+  alertLog: [],
+  processPanelVisible: false,
 
   setStatus: (status) => set({ status }),
   setHostname: (hostname) => set({ hostname }),
@@ -101,7 +120,6 @@ export const useServerStore = create<ServerStore>((set) => ({
   toggleDiskSidebar: () => set((s) => ({ diskSidebarVisible: !s.diskSidebarVisible })),
   saveConnection: (conn) =>
     set((s) => {
-      // Upsert by id
       const existing = s.savedConnections.findIndex(c => c.id === conn.id)
       const next = existing >= 0
         ? s.savedConnections.map(c => c.id === conn.id ? conn : c)
@@ -115,6 +133,11 @@ export const useServerStore = create<ServerStore>((set) => ({
       persistSaved(next)
       return { savedConnections: next }
     }),
+  setProcesses: (processes) => set({ processes }),
+  setServerInfo: (serverInfo) => set({ serverInfo }),
+  addAlert: (a) => set((s) => ({ alertLog: [...s.alertLog.slice(-19), a] })),
+  removeAlert: (id) => set((s) => ({ alertLog: s.alertLog.filter(a => a.id !== id) })),
+  toggleProcessPanel: () => set((s) => ({ processPanelVisible: !s.processPanelVisible })),
   reset: () =>
     set({
       status: 'idle',
@@ -128,8 +151,9 @@ export const useServerStore = create<ServerStore>((set) => ({
       selectedFloor: null,
       subdirsByMount: {},
       cameraResetToken: 0,
-      // intentionally keep lastConfig so reconnect can still work
-      // intentionally keep diskSidebarVisible — user preference
-      // intentionally keep savedConnections — they persist across sessions
+      processes: [],
+      serverInfo: null,
+      processPanelVisible: false,
+      // keep: lastConfig (reconnect), diskSidebarVisible, savedConnections, alertLog
     }),
 }))

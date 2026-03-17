@@ -22,6 +22,10 @@ export function useKeyboardShortcuts() {
         case 'D':
           store.toggleDiskSidebar()
           break
+        case 'p':
+        case 'P':
+          store.toggleProcessPanel()
+          break
         case '1':
         case '2':
         case '3':

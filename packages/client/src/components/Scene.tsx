@@ -7,6 +7,7 @@ import { IdleBuilding } from '../scene/IdleBuilding'
 import { CameraRig } from '../scene/CameraRig'
 import { SceneLights } from '../scene/SceneLights'
 import { Skyline } from '../scene/Skyline'
+import { AmbientParticles } from '../scene/AmbientParticles'
 
 interface SceneProps {
   metrics: ServerMetrics | null
@@ -15,13 +16,13 @@ interface SceneProps {
 }
 
 export function Scene({ metrics, connected, isConnecting = false }: SceneProps) {
-  const cpuPercent   = metrics?.cpu.overall ?? 0
-  const memPercent   = metrics?.memory.usedPercent ?? 0
+  const cpuPercent    = metrics?.cpu.overall ?? 0
+  const memPercent    = metrics?.memory.usedPercent ?? 0
   const selectedFloor = useServerStore(s => s.selectedFloor)
 
   return (
     <Canvas camera={{ position: [10, 9, 13], fov: 45 }} gl={{ antialias: true }} shadows>
-      <color attach="background" args={['#0a0a0f']} />
+      <color attach="background" args={['#07070f']} />
 
       <SceneLights cpuPercent={cpuPercent} memPercent={memPercent} />
       <CameraRig connected={connected} selectedFloor={selectedFloor} />
@@ -29,13 +30,16 @@ export function Scene({ metrics, connected, isConnecting = false }: SceneProps) 
       <Ground />
       <Skyline />
 
-      {metrics && connected ? (
-        <Building metrics={metrics} connected={connected} />
+      {connected && metrics ? (
+        <>
+          <Building metrics={metrics} connected={connected} />
+          <AmbientParticles />
+        </>
       ) : (
         <IdleBuilding connecting={isConnecting} />
       )}
 
-      <fog attach="fog" args={['#0a0a0f', 20, 50]} />
+      <fog attach="fog" args={['#07070f', 22, 55]} />
     </Canvas>
   )
 }

@@ -22,6 +22,7 @@ export function useWebSocket() {
   const {
     setStatus, setHostname, setMetrics, setMetricsStale,
     setError, setLastConfig, setRetry, setFingerprintChallenge, setSubdirs,
+    setProcesses, setServerInfo,
   } = useServerStore()
 
   const clearTimers = useCallback(() => {
@@ -56,6 +57,8 @@ export function useWebSocket() {
         setRetry(0, 0)
         setStatus('connected')
         setHostname(msg.payload.hostname)
+        // Fetch server info once on connect
+        ws.send(JSON.stringify({ type: 'request_server_info' }))
       } else if (msg.type === 'metrics') {
         setMetrics(msg.payload)
         if (msg.stale) setMetricsStale(true)
@@ -76,6 +79,10 @@ export function useWebSocket() {
         setFingerprintChallenge(msg.payload)
       } else if (msg.type === 'subdirs_result') {
         setSubdirs(msg.payload.mount, msg.payload.subdirs)
+      } else if (msg.type === 'ps_result') {
+        setProcesses(msg.payload.processes)
+      } else if (msg.type === 'server_info') {
+        setServerInfo(msg.payload)
       }
     }
 
@@ -125,7 +132,7 @@ export function useWebSocket() {
         }, delayMs)
       }
     }
-  }, [setStatus, setHostname, setMetrics, setMetricsStale, setError, setRetry, resetStaleTimer, clearTimers, setFingerprintChallenge, setSubdirs])
+  }, [setStatus, setHostname, setMetrics, setMetricsStale, setError, setRetry, resetStaleTimer, clearTimers, setFingerprintChallenge, setSubdirs, setProcesses, setServerInfo])
 
   const connect = useCallback((config: ConnectionConfig) => {
     intentionalRef.current = false
@@ -174,7 +181,14 @@ export function useWebSocket() {
     }
   }, [])
 
+  const requestPs = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg: WSClientMessage = { type: 'request_ps' }
+      wsRef.current.send(JSON.stringify(msg))
+    }
+  }, [])
+
   useEffect(() => () => disconnect(), [disconnect])
 
-  return { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs }
+  return { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs }
 }
