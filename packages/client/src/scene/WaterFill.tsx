@@ -5,6 +5,8 @@ import { BLDG_D, BLDG_W, TOTAL_H } from './constants'
 
 export interface WaterFillProps {
   memPercent: number
+  swapUsedMb?: number
+  swapTotalMb?: number
 }
 
 // Pre-allocated — no GC in render loop
@@ -73,8 +75,30 @@ function WaveSurface({ fillHeight, danger }: { fillHeight: number; danger: boole
   )
 }
 
+// ── Swap band — thin purple layer just above the RAM water line ──────────────
+function SwapBand({ ramFillHeight, swapUsedMb, swapTotalMb }: { ramFillHeight: number; swapUsedMb: number; swapTotalMb: number }) {
+  // Height capped at 8% of total building height so it stays subtle
+  const swapPct = Math.min(1, swapUsedMb / swapTotalMb)
+  const bandH = swapPct * TOTAL_H * 0.08
+  if (bandH < 0.02) return null
+
+  return (
+    <mesh position={[0, ramFillHeight + bandH / 2, 0]}>
+      <boxGeometry args={[BLDG_W - 0.1, bandH, BLDG_D - 0.1]} />
+      <meshStandardMaterial
+        color="#a855f7"
+        emissive="#a855f7"
+        emissiveIntensity={0.4}
+        transparent
+        opacity={0.28}
+        depthWrite={false}
+      />
+    </mesh>
+  )
+}
+
 // ── Volume fill box + wave surface ───────────────────────────────────────────
-export function WaterFill({ memPercent }: WaterFillProps) {
+export function WaterFill({ memPercent, swapUsedMb = 0, swapTotalMb = 0 }: WaterFillProps) {
   const fillHeight = (memPercent / 100) * TOTAL_H
   const isDanger = memPercent > 85
 
@@ -97,6 +121,11 @@ export function WaterFill({ memPercent }: WaterFillProps) {
 
       {/* Animated wave surface at water line */}
       <WaveSurface fillHeight={fillHeight} danger={isDanger} />
+
+      {/* Swap usage band above RAM fill */}
+      {swapTotalMb > 0 && (
+        <SwapBand ramFillHeight={fillHeight} swapUsedMb={swapUsedMb} swapTotalMb={swapTotalMb} />
+      )}
     </group>
   )
 }

@@ -128,7 +128,11 @@ export function Building({ metrics, connected }: BuildingProps) {
           </mesh>
         ))}
 
-        <WaterFill memPercent={metrics.memory.usedPercent} />
+        <WaterFill
+          memPercent={metrics.memory.usedPercent}
+          swapUsedMb={metrics.swap?.usedMb}
+          swapTotalMb={metrics.swap?.totalMb}
+        />
 
         {Array.from({ length: FLOORS }).map((_, i) => (
           <DiskFloor key={i} disk={floorData[i] ?? null} floor={i} selected={selectedFloor === i} />

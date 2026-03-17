@@ -1,5 +1,6 @@
 import { useServerStore } from './store/useServerStore'
 import { useWebSocket } from './hooks/useWebSocket'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { ConnectForm } from './components/ConnectForm'
 import { Scene } from './components/Scene'
 import { HUD } from './components/HUD'
@@ -9,8 +10,9 @@ import { DiskSidebar } from './components/DiskSidebar'
 import { ConnectionConfig } from '@servercity/shared'
 
 export default function App() {
-  const { status, metrics, errorMessage, reset, fingerprintChallenge } = useServerStore()
+  const { status, metrics, errorMessage, reset, fingerprintChallenge, diskSidebarVisible } = useServerStore()
   const { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs } = useWebSocket()
+  useKeyboardShortcuts()
 
   const isConnected = status === 'connected'
   const isConnecting = status === 'connecting'
@@ -44,7 +46,7 @@ export default function App() {
         {showHUD && (
           <HUD onDisconnect={handleDisconnect} onReconnect={handleReconnect} />
         )}
-        {showHUD && <DiskSidebar onRequestSubdirs={requestSubdirs} />}
+        {showHUD && diskSidebarVisible && <DiskSidebar onRequestSubdirs={requestSubdirs} />}
       </div>
 
       {/* Connect form — fades out when scene takes over */}
