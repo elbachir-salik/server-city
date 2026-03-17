@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useServerStore } from '../store/useServerStore'
 import { useLerpedMetrics } from '../hooks/useLerpedMetrics'
 import { useLastUpdated } from '../hooks/useLastUpdated'
+import { useMetricHistory } from '../hooks/useMetricHistory'
 
 interface Props {
   onDisconnect: () => void
@@ -13,6 +14,25 @@ function formatBytes(bytes: number): string {
   if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB/s`
   if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(1)} KB/s`
   return `${bytes} B/s`
+}
+
+// ── Sparkline SVG polyline ────────────────────────────────────────────────────
+function Sparkline({ data, width = 60, height = 16, color }: { data: number[]; width?: number; height?: number; color: string }) {
+  if (data.length < 2) return null
+  const max = Math.max(...data, 1)
+  const pts = data
+    .map((v, i) => {
+      const x = (i / (data.length - 1)) * width
+      const y = height - (v / max) * height
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+
+  return (
+    <svg width={width} height={height} style={{ display: 'block', opacity: 0.7 }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
 }
 
 // ── Pulsing vignette that appears at memory danger thresholds ────────────────
@@ -30,12 +50,10 @@ function OOMVignette({ memPercent }: { memPercent: number }) {
       const t = Math.sin(phaseRef.current)
 
       if (memPercent >= 95) {
-        // Full alarm: fast bright pulse
         const alpha = 0.18 + Math.abs(t) * 0.22
         el.style.boxShadow = `inset 0 0 120px 40px rgba(220,38,38,${alpha})`
         el.style.opacity = '1'
       } else if (memPercent >= 85) {
-        // Warning: slow dim pulse
         const alpha = 0.06 + Math.abs(t) * 0.08
         el.style.boxShadow = `inset 0 0 100px 30px rgba(251,146,60,${alpha})`
         el.style.opacity = '1'
@@ -67,16 +85,21 @@ interface MetricCardProps {
   percent?: number
   danger?: boolean
   warn?: boolean
+  sparkData?: number[]
+  sparkColor?: string
 }
 
-function MetricCard({ label, value, sub, percent, danger, warn }: MetricCardProps) {
+function MetricCard({ label, value, sub, percent, danger, warn, sparkData, sparkColor }: MetricCardProps) {
   const barColor = danger ? 'bg-red-500' : warn ? 'bg-amber-400' : 'bg-indigo-400'
   const borderColor = danger ? 'border-red-500/50' : warn ? 'border-amber-400/40' : 'border-city-border'
   const valueColor = danger ? 'text-red-400' : warn ? 'text-amber-400' : 'text-white'
 
   return (
     <div className={`bg-black/50 border ${borderColor} rounded-lg px-3 py-2 min-w-[105px]`}>
-      <div className="text-gray-400 text-xs mb-0.5">{label}</div>
+      <div className="flex items-center justify-between mb-0.5">
+        <div className="text-gray-400 text-xs">{label}</div>
+        {sparkData && sparkColor && <Sparkline data={sparkData} color={sparkColor} />}
+      </div>
       <div className={`font-bold text-sm ${valueColor}`}>{value}</div>
       {sub && <div className="text-gray-500 text-xs">{sub}</div>}
       {percent !== undefined && (
@@ -91,11 +114,61 @@ function MetricCard({ label, value, sub, percent, danger, warn }: MetricCardProp
   )
 }
 
+// ── Shortcuts legend overlay ──────────────────────────────────────────────────
+function ShortcutsLegend({ onClose }: { onClose: () => void }) {
+  const shortcuts = [
+    { key: 'R', desc: 'Reset camera view' },
+    { key: 'D', desc: 'Toggle disk sidebar' },
+    { key: '1–5', desc: 'Select floor' },
+    { key: 'Esc', desc: 'Deselect floor' },
+  ]
+
+  return (
+    <div
+      className="absolute inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={onClose}
+    >
+      <div
+        className="bg-city-panel border border-city-border rounded-xl px-6 py-5 backdrop-blur min-w-[220px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-white font-semibold text-sm mb-3">Keyboard Shortcuts</div>
+        {shortcuts.map(({ key, desc }) => (
+          <div key={key} className="flex items-center gap-3 mb-2">
+            <kbd className="bg-black/60 border border-gray-600 rounded px-2 py-0.5 text-xs font-mono text-gray-200 min-w-[36px] text-center">
+              {key}
+            </kbd>
+            <span className="text-gray-400 text-xs">{desc}</span>
+          </div>
+        ))}
+        <button
+          onClick={onClose}
+          className="mt-3 text-gray-600 hover:text-gray-400 text-xs w-full text-center transition-colors"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Main HUD ─────────────────────────────────────────────────────────────────
 export function HUD({ onDisconnect, onReconnect }: Props) {
-  const { status, hostname, metrics: rawMetrics, metricsStale, retryAttempt, retryCountdown } = useServerStore()
+  const { status, hostname, metrics: rawMetrics, metricsStale, retryAttempt, retryCountdown, resetCamera } = useServerStore()
   const metrics = useLerpedMetrics(rawMetrics)
   const secondsAgo = useLastUpdated(rawMetrics)
+  const [showShortcuts, setShowShortcuts] = useState(false)
+
+  const cpuPct = metrics?.cpu.overall ?? 0
+  const memPct = metrics?.memory.usedPercent ?? 0
+
+  const cpuHistory = useMetricHistory(cpuPct)
+  const memHistory = useMetricHistory(memPct)
+
+  const isOOM = memPct >= 95
+  const isMemWarn = memPct >= 85 && !isOOM
+  const isCPUWarn = cpuPct >= 90
 
   const statusColor =
     status === 'connected'
@@ -104,16 +177,13 @@ export function HUD({ onDisconnect, onReconnect }: Props) {
         ? 'bg-red-400'
         : 'bg-yellow-400'
 
-  const memPct = metrics?.memory.usedPercent ?? 0
-  const cpuPct = metrics?.cpu.overall ?? 0
-  const isOOM = memPct >= 95
-  const isMemWarn = memPct >= 85 && !isOOM
-  const isCPUWarn = cpuPct >= 90
-
   return (
     <>
       {/* OOM screen-edge vignette */}
       {metrics && <OOMVignette memPercent={memPct} />}
+
+      {/* Shortcuts overlay */}
+      {showShortcuts && <ShortcutsLegend onClose={() => setShowShortcuts(false)} />}
 
       {/* Critical memory banner */}
       {isOOM && (
@@ -135,17 +205,38 @@ export function HUD({ onDisconnect, onReconnect }: Props) {
         )}
       </div>
 
-      {/* Top-right: disconnect */}
-      {status === 'connected' && (
-        <div className="absolute top-4 right-4 z-10">
+      {/* Top-right: controls */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        {/* Shortcuts help */}
+        <button
+          onClick={() => setShowShortcuts(true)}
+          title="Keyboard shortcuts"
+          className="bg-city-panel border border-city-border rounded-xl w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white hover:border-gray-500 text-sm transition-colors backdrop-blur"
+        >
+          ?
+        </button>
+
+        {/* Camera reset — only when connected */}
+        {status === 'connected' && (
+          <button
+            onClick={resetCamera}
+            title="Reset camera view (R)"
+            className="bg-city-panel border border-city-border rounded-xl px-3 py-2 text-gray-400 hover:text-white hover:border-indigo-500/50 text-sm transition-colors backdrop-blur"
+          >
+            ⟳
+          </button>
+        )}
+
+        {/* Disconnect */}
+        {status === 'connected' && (
           <button
             onClick={onDisconnect}
             className="bg-city-panel border border-city-border rounded-xl px-4 py-2 text-gray-400 hover:text-white hover:border-red-500/50 text-sm transition-colors backdrop-blur"
           >
             Disconnect
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Auto-retry countdown banner */}
       {status === 'reconnecting' && (
@@ -208,6 +299,8 @@ export function HUD({ onDisconnect, onReconnect }: Props) {
             value={`${cpuPct.toFixed(1)}%`}
             percent={cpuPct}
             warn={isCPUWarn}
+            sparkData={cpuHistory}
+            sparkColor={isCPUWarn ? '#f87171' : '#818cf8'}
           />
           <MetricCard
             label="Memory"
@@ -216,7 +309,19 @@ export function HUD({ onDisconnect, onReconnect }: Props) {
             percent={memPct}
             danger={isOOM}
             warn={isMemWarn}
+            sparkData={memHistory}
+            sparkColor={isOOM ? '#f87171' : isMemWarn ? '#fb923c' : '#60a5fa'}
           />
+          {metrics.swap && metrics.swap.totalMb > 0 && (
+            <MetricCard
+              label="Swap"
+              value={`${metrics.swap.usedMb} MB`}
+              sub={`of ${metrics.swap.totalMb} MB`}
+              percent={(metrics.swap.usedMb / metrics.swap.totalMb) * 100}
+              warn={(metrics.swap.usedMb / metrics.swap.totalMb) > 0.5}
+              danger={(metrics.swap.usedMb / metrics.swap.totalMb) > 0.85}
+            />
+          )}
           {metrics.disk.slice(0, 2).map((d) => (
             <MetricCard
               key={d.mount}
