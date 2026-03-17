@@ -23,66 +23,60 @@ function diskColor(pct: number): string {
   return '#22c55e'
 }
 
-// Tray is the dark container visible for every floor (the "black background")
-const TRAY_W  = BLDG_W - 0.12  // 2.88 — slightly wider than fill
-const TRAY_H  = 0.22
-const TRAY_D  = BLDG_D - 0.22
-const FILL_H  = 0.14            // fill is slightly shorter than tray — tray border visible
-const FILL_D  = BLDG_D - 0.34
-const MAX_FILL = BLDG_W - 0.2  // 2.8 — fill travels this width
+// Place panels ON the exterior shell faces — same pattern as FloorWindows
+const FACE_Z    = BLDG_D / 2 + 0.012   // front face (+Z)
+const BAND_W    = BLDG_W - 0.14        // 2.86  — full front face width minus margin
+const BAND_H    = FLOOR_H * 0.30       // horizontal band height
+const ACCENT_H  = 0.03                 // thin accent strip at top of band
+const BG_COLOR  = new THREE.Color('#0b0b1c')
 
 export function DiskFloor({ disk, floor, selected = false }: DiskFloorProps) {
-  const groupRef    = useRef<THREE.Group>(null)
   const fillRef     = useRef<THREE.Mesh>(null)
   const fillMatRef  = useRef<THREE.MeshStandardMaterial>(null)
-  const accentRef   = useRef<THREE.MeshStandardMaterial>(null)
+  const accentMatRef = useRef<THREE.MeshStandardMaterial>(null)
 
   const isHovered = useRef(false)
   const hoverProg = useRef(0)
   const [showPanel, setShowPanel] = useState(false)
-
-  const animFill = useRef(0)
+  const animPct   = useRef(0)   // 0 → pct, resets on select
 
   const pct   = disk ? Math.max(0, Math.min(100, disk.usedPercent)) : 0
   const color = diskColor(pct)
-  const baseY = floor * FLOOR_H + TRAY_H / 2 + 0.05
+  // Band sits centered vertically in each floor slot
+  const y     = floor * FLOOR_H + FLOOR_H * 0.5
 
-  // Replay fill animation from zero each time floor is selected
   useEffect(() => {
-    if (selected) animFill.current = 0
+    if (selected) animPct.current = 0
   }, [selected])
 
   useFrame(({ clock }) => {
     hoverProg.current += ((isHovered.current ? 1 : 0) - hoverProg.current) * 0.10
 
-    // Slower on select (dramatic reveal), faster on normal mount
-    const fillSpeed = selected ? 0.025 : 0.055
-    animFill.current = Math.min(1, animFill.current + (1 - animFill.current) * fillSpeed)
+    // Fill animation: selected = slow dramatic reveal, otherwise quick on mount
+    const speed = selected ? 0.022 : 0.055
+    animPct.current += (pct - animPct.current) * speed
 
-    // Drive fill mesh — left-edge pinned
-    const currentW = Math.max(0.001, (pct / 100) * MAX_FILL * animFill.current)
+    const s = Math.max(0.0001, animPct.current / 100)
+
+    // Left-edge pinned: scale fill in X, shift center to keep left side fixed
     if (fillRef.current) {
-      fillRef.current.position.x = -MAX_FILL / 2 + currentW / 2
-      fillRef.current.scale.x = currentW / Math.max(0.001, MAX_FILL)
+      fillRef.current.scale.x = s
+      fillRef.current.position.x = BAND_W * (s - 1) / 2
     }
 
-    // Emissive: base 0.6, extra when selected (pulsing), extra on hover
+    // Emissive intensity
     if (fillMatRef.current && disk) {
       const pulse = selected
-        ? 0.55 + Math.abs(Math.sin(clock.getElapsedTime() * 3)) * 0.7
-        : 0.6
-      fillMatRef.current.emissiveIntensity = pulse + hoverProg.current * 0.4
+        ? 1.3 + Math.abs(Math.sin(clock.getElapsedTime() * 3)) * 1.4
+        : 1.6
+      fillMatRef.current.emissiveIntensity = pulse + hoverProg.current * 0.6
     }
 
-    // Accent line on top changes intensity with urgency
-    if (accentRef.current && disk) {
-      const base = pct > 90 ? 0.9 : pct > 70 ? 0.7 : 0.45
-      accentRef.current.emissiveIntensity = base + Math.sin(clock.getElapsedTime() * 2) * 0.1
-    }
-
-    // Hover Y lift
-    if (groupRef.current) {
-      groupRef.current.position.y = baseY + hoverProg.current * 0.04
+    // Accent line intensity varies with urgency
+    if (accentMatRef.current && disk) {
+      const base = pct > 90 ? 2.0 : pct > 70 ? 1.5 : 1.1
+      accentMatRef.current.emissiveIntensity =
+        base + Math.sin(clock.getElapsedTime() * 2.5) * 0.25
     }
   })
 
@@ -90,52 +84,50 @@ export function DiskFloor({ disk, floor, selected = false }: DiskFloorProps) {
   const panelVisible = showPanel || selected
 
   return (
-    <group ref={groupRef} position={[0, baseY, 0]}>
-
-      {/* ── TRAY: the "black background" container ── */}
-      <mesh>
-        <boxGeometry args={[TRAY_W, TRAY_H, TRAY_D]} />
+    <>
+      {/* ── BACKGROUND BAND — dark strip showing the "empty" portion ── */}
+      <mesh position={[0, y, FACE_Z]}>
+        <planeGeometry args={[BAND_W, BAND_H]} />
         <meshStandardMaterial
-          color="#05050e"
-          emissive="#08083a"
-          emissiveIntensity={0.06}
-          transparent
-          opacity={0.97}
+          color={BG_COLOR}
+          emissive={BG_COLOR}
+          emissiveIntensity={0.25}
         />
       </mesh>
 
-      {/* ── ACCENT LINE: top edge of tray, color = usage level ── */}
+      {/* ── ACCENT LINE — thin colored strip at top of band, usage color ── */}
       {disk && (
-        <mesh position={[0, TRAY_H / 2 + 0.005, 0]}>
-          <boxGeometry args={[TRAY_W, 0.018, TRAY_D + 0.01]} />
+        <mesh position={[0, y + BAND_H / 2 + ACCENT_H / 2, FACE_Z]}>
+          <planeGeometry args={[BAND_W, ACCENT_H]} />
           <meshStandardMaterial
-            ref={accentRef}
+            ref={accentMatRef}
             color={color}
             emissive={color}
-            emissiveIntensity={0.7}
+            emissiveIntensity={1.5}
           />
         </mesh>
       )}
 
-      {/* ── FILL: left-pinned, width = usedPercent × MAX_FILL ── */}
+      {/* ── FILL — left-pinned, width = animPct% of BAND_W, usage color ── */}
       {disk && (
         <mesh
           ref={fillRef}
-          position={[-MAX_FILL / 2, 0, 0]}  // position updated in useFrame
+          position={[0, y, FACE_Z + 0.001]}   // fractionally in front of bg
         >
-          <boxGeometry args={[MAX_FILL, FILL_H, FILL_D]} />
+          <planeGeometry args={[BAND_W, BAND_H - 0.02]} />
           <meshStandardMaterial
             ref={fillMatRef}
             color={color}
             emissive={color}
-            emissiveIntensity={0.6}
+            emissiveIntensity={1.6}
           />
         </mesh>
       )}
 
-      {/* ── HIT AREA: full tray footprint for pointer events ── */}
+      {/* ── HIT AREA — pointer events on front face ── */}
       {disk && (
         <mesh
+          position={[0, y, FACE_Z + 0.002]}
           onPointerOver={(e) => {
             e.stopPropagation()
             document.body.style.cursor = 'pointer'
@@ -148,7 +140,7 @@ export function DiskFloor({ disk, floor, selected = false }: DiskFloorProps) {
             setShowPanel(false)
           }}
         >
-          <boxGeometry args={[TRAY_W, TRAY_H + 0.1, TRAY_D]} />
+          <planeGeometry args={[BAND_W, BAND_H + 0.3]} />
           <meshStandardMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
       )}
@@ -156,7 +148,7 @@ export function DiskFloor({ disk, floor, selected = false }: DiskFloorProps) {
       {/* ── DETAIL PANEL ── */}
       {panelVisible && disk && (
         <Html
-          position={[BLDG_W / 2 + 0.45, 0, 0]}
+          position={[BLDG_W / 2 + 0.45, y, FACE_Z]}
           center={false}
           occlude={false}
           style={{ pointerEvents: 'none' }}
@@ -164,24 +156,24 @@ export function DiskFloor({ disk, floor, selected = false }: DiskFloorProps) {
           <div
             style={{
               background: selected ? 'rgba(12,12,28,0.97)' : 'rgba(8,8,18,0.93)',
-              border: `1px solid ${color}${selected ? 'bb' : '66'}`,
+              border: `1px solid ${color}${selected ? 'cc' : '66'}`,
               borderRadius: 7,
               padding: '7px 11px',
               whiteSpace: 'nowrap',
               fontFamily: 'monospace',
               fontSize: 11,
-              color: color,
+              color,
               minWidth: 158,
               lineHeight: 1.7,
-              boxShadow: selected ? `0 0 18px ${color}44` : 'none',
+              boxShadow: selected ? `0 0 20px ${color}44` : 'none',
             }}
           >
             <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 4 }}>
               FLOOR {floor + 1} — {disk.mount}
             </div>
 
-            {/* Animated mini bar */}
-            <div style={{ height: 5, background: '#05050e', borderRadius: 3, overflow: 'hidden', marginBottom: 7 }}>
+            {/* Mini bar */}
+            <div style={{ height: 5, background: '#0b0b1c', borderRadius: 3, overflow: 'hidden', marginBottom: 7 }}>
               <div
                 style={{
                   width: `${pct}%`,
@@ -210,6 +202,6 @@ export function DiskFloor({ disk, floor, selected = false }: DiskFloorProps) {
           </div>
         </Html>
       )}
-    </group>
+    </>
   )
 }
