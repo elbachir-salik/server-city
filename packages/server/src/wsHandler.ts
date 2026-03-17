@@ -126,6 +126,23 @@ export function handleWSConnection(ws: WebSocket) {
         send({ type: 'subdirs_result', payload: { mount, subdirs } })
       })
     }
+
+    if (msg.type === 'request_ps') {
+      if (!session) {
+        send({ type: 'error', payload: { message: 'Not connected to a server.' } })
+        return
+      }
+      session.getProcessList((processes) => {
+        send({ type: 'ps_result', payload: { processes } })
+      })
+    }
+
+    if (msg.type === 'request_server_info') {
+      if (!session) return
+      session.getServerInfo((info) => {
+        send({ type: 'server_info', payload: info })
+      })
+    }
   })
 
   ws.on('close', () => {

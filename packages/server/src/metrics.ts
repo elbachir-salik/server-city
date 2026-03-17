@@ -1,4 +1,4 @@
-import { ServerMetrics, SubdirEntry } from '@servercity/shared'
+import { ServerMetrics, SubdirEntry, ProcessEntry, ServerInfo } from '@servercity/shared'
 
 // ── CPU ───────────────────────────────────────────────────────────────────────
 export function parseCPU(raw: string): { overall: number; cores: number[] } {
@@ -175,6 +175,39 @@ export function parseDirUsage(raw: string, mount: string): SubdirEntry[] {
     .filter((e): e is SubdirEntry => e !== null)
     .sort((a, b) => b.usedGb - a.usedGb)
     .slice(0, 8)
+}
+
+// ── Process list (from `ps aux --sort=-%cpu | head -16`) ──────────────────────
+export function parseProcessList(raw: string): ProcessEntry[] {
+  const lines = raw.trim().split('\n').slice(1) // drop header
+  const result: ProcessEntry[] = []
+  for (const line of lines) {
+    if (!line.trim()) continue
+    const parts = line.trim().split(/\s+/)
+    if (parts.length < 11) continue
+    const pid = parseInt(parts[1], 10)
+    const cpu = parseFloat(parts[2])
+    const mem = parseFloat(parts[3])
+    if (isNaN(pid) || isNaN(cpu) || isNaN(mem)) continue
+    result.push({
+      user: parts[0].slice(0, 12),
+      pid,
+      cpu,
+      mem,
+      cmd: parts.slice(10).join(' ').slice(0, 48),
+    })
+  }
+  return result.slice(0, 15)
+}
+
+// ── Server info (from uname + uptime) ────────────────────────────────────────
+export function parseServerInfo(raw: string): ServerInfo {
+  const lines = raw.trim().split('\n')
+  // Expected: line 0 = kernel (uname -r), line 1 = OS (uname -s), line 2+ = uptime
+  const kernel = lines[0]?.trim() ?? ''
+  const os = lines[1]?.trim() ?? 'Linux'
+  const uptime = lines.slice(2).join(' ').trim()
+  return { kernel, os, uptime }
 }
 
 // ── Builder ───────────────────────────────────────────────────────────────────

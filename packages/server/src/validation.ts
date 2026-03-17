@@ -109,5 +109,11 @@ export function validateWSClientMessage(raw: unknown): raw is WSClientMessage {
     return typeof msg.payload === 'object' && msg.payload !== null &&
       isValidMountPath((msg.payload as Record<string, unknown>).mount)
   }
-  return msg.type === 'connect' || msg.type === 'disconnect' || msg.type === 'fingerprint_response'
+  return (
+    msg.type === 'connect' ||
+    msg.type === 'disconnect' ||
+    msg.type === 'fingerprint_response' ||
+    msg.type === 'request_ps' ||
+    msg.type === 'request_server_info'
+  )
 }

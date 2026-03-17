@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { Client } from 'ssh2'
-import { ConnectionConfig, ServerMetrics } from '@servercity/shared'
-import { buildMetrics, parseDirUsage } from './metrics'
+import { ConnectionConfig, ServerMetrics, ProcessEntry, ServerInfo } from '@servercity/shared'
+import { buildMetrics, parseDirUsage, parseProcessList, parseServerInfo } from './metrics'
 import { friendlySSHError } from './errorMessages'
 import { SubdirEntry } from '@servercity/shared'
 
@@ -161,6 +161,25 @@ export class SSHSession {
     this.execCommand(cmd, (err, output) => {
       if (err) { cb([]); return }
       cb(parseDirUsage(output, mount))
+    })
+  }
+
+  /** Run `ps aux` and return the top processes sorted by CPU usage. */
+  getProcessList(cb: (processes: ProcessEntry[]) => void) {
+    if (!this.alive) { cb([]); return }
+    // Try GNU sort flag first; fall back to plain ps if not available
+    const cmd = `ps aux --sort=-%cpu 2>/dev/null | head -16 || ps aux | head -16`
+    this.execCommand(cmd, (err, output) => {
+      cb(err ? [] : parseProcessList(output))
+    })
+  }
+
+  /** Fetch kernel version, OS name, and uptime for the server info overlay. */
+  getServerInfo(cb: (info: ServerInfo) => void) {
+    if (!this.alive) { cb({ kernel: '', os: 'Linux', uptime: '' }); return }
+    const cmd = `uname -r && uname -s && uptime -p 2>/dev/null || uptime`
+    this.execCommand(cmd, (err, output) => {
+      cb(err ? { kernel: '', os: 'Linux', uptime: '' } : parseServerInfo(output))
     })
   }
 

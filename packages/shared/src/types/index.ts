@@ -3,6 +3,20 @@ export interface SubdirEntry {
   usedGb: number
 }
 
+export interface ProcessEntry {
+  pid: number
+  user: string
+  cpu: number
+  mem: number
+  cmd: string
+}
+
+export interface ServerInfo {
+  kernel: string
+  os: string
+  uptime: string
+}
+
 export interface ServerMetrics {
   timestamp: number
   cpu: {
@@ -50,9 +64,13 @@ export type WSMessage =
   | { type: 'disconnected' }
   | { type: 'fingerprint_challenge'; payload: { fingerprint: string; host: string; port: number } }
   | { type: 'subdirs_result'; payload: { mount: string; subdirs: SubdirEntry[] } }
+  | { type: 'ps_result'; payload: { processes: ProcessEntry[] } }
+  | { type: 'server_info'; payload: ServerInfo }
 
 export type WSClientMessage =
   | { type: 'connect'; payload: ConnectionConfig }
   | { type: 'disconnect' }
   | { type: 'fingerprint_response'; payload: { approved: boolean } }
   | { type: 'request_subdirs'; payload: { mount: string } }
+  | { type: 'request_ps' }
+  | { type: 'request_server_info' }
