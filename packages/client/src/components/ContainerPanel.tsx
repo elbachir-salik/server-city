@@ -184,10 +184,13 @@ export function ContainerPanel({ onRequestLogs, onStopLogs }: ContainerPanelProp
               </Section>
             )}
 
-            {container.volumes.length > 0 && (
-              <Section title="Volumes">
-                {container.volumes.map((v, i) => (
-                  <div key={i} style={{ color: '#9ca3af', fontSize: 11, padding: '2px 0', wordBreak: 'break-all' }}>{v}</div>
+            {container.mounts.length > 0 && (
+              <Section title="Mounts">
+                {container.mounts.map((m, i) => (
+                  <div key={i} style={{ fontSize: 11, padding: '2px 0' }}>
+                    <span style={{ color: '#9ca3af', wordBreak: 'break-all' }}>{m.destination}</span>
+                    {m.name && <span style={{ color: '#4b5563', fontSize: 10 }}> ← {m.name}</span>}
+                  </div>
                 ))}
               </Section>
             )}

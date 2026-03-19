@@ -1,4 +1,4 @@
-import { ServerMetrics, SubdirEntry, ProcessEntry, ServerInfo, DirectoryNode, FileContent, DockerContainer, DockerVolume, DockerNetwork, DockerInfo, ContainerStatus, DockerPort } from '@servercity/shared'
+import { ServerMetrics, SubdirEntry, ProcessEntry, ServerInfo, DirectoryNode, FileContent, DockerContainer, DockerVolume, DockerNetwork, DockerInfo, ContainerStatus, DockerPort, DockerMount } from '@servercity/shared'
 
 // ── CPU ───────────────────────────────────────────────────────────────────────
 export function parseCPU(raw: string): { overall: number; cores: number[] } {
@@ -366,15 +366,16 @@ export function parseDockerData(
     // Networks from ps output
     const networks = ((ps['Networks'] ?? '') as string).split(',').map(s => s.trim()).filter(Boolean)
 
-    // Volumes + env vars from inspect
-    const volumes: string[] = []
+    // Mounts + env vars from inspect
+    const mounts: DockerMount[] = []
     const envVars: Array<{ key: string; value: string }> = []
     let restartCount = 0
     if (inspectEntry) {
-      const mounts = (inspectEntry['Mounts'] as Array<Record<string, unknown>> | undefined) ?? []
-      for (const m of mounts) {
-        if (m['Name']) volumes.push(m['Name'] as string)
-        else if (m['Source']) volumes.push(m['Source'] as string)
+      const rawMounts = (inspectEntry['Mounts'] as Array<Record<string, unknown>> | undefined) ?? []
+      for (const m of rawMounts) {
+        const name = (m['Name'] ?? m['Source'] ?? '') as string
+        const destination = (m['Destination'] ?? '') as string
+        if (name) mounts.push({ name, destination })
       }
       const env = ((inspectEntry['Config'] as Record<string, unknown> | undefined)?.['Env'] ?? []) as string[]
       for (const e of env) {
@@ -400,7 +401,7 @@ export function parseDockerData(
       memoryMb: memUsed,
       memoryLimitMb: memLimit || 0,
       ports,
-      volumes,
+      mounts,
       networks,
       restartCount,
       envVars,

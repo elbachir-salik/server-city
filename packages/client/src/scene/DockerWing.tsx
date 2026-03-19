@@ -246,8 +246,9 @@ export function DockerWing({ onSelectContainer }: DockerWingProps) {
       ))}
 
       {/* Volumes as basement slabs */}
-      {dockerInfo.volumes.slice(0, 6).map((vol, i) => (
-        <mesh key={vol.name} position={[WING_START + ROOM_W / 2, -0.25 - i * 0.18, 0]}>
+      {/* Volumes = unique mount names across all containers */}
+      {Array.from(new Set(containers.flatMap(c => c.mounts.map(m => m.name)))).slice(0, 6).map((volName, i) => (
+        <mesh key={volName} position={[WING_START + ROOM_W / 2, -0.25 - i * 0.18, 0]}>
           <boxGeometry args={[ROOM_W * 0.9, 0.12, ROOM_D * 0.6]} />
           <meshStandardMaterial color="#1e293b" emissive="#334155" emissiveIntensity={0.5} transparent opacity={0.9} />
         </mesh>
