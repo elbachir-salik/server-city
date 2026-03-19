@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useServerStore } from './store/useServerStore'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
@@ -13,14 +13,13 @@ import { AlertToast } from './components/AlertToast'
 import { ProcessPanel } from './components/ProcessPanel'
 import { CommandBar } from './components/CommandBar'
 import { FilePanel } from './components/FilePanel'
-import { DockerPanel } from './components/DockerPanel'
+import { DockerPage } from './pages/DockerPage'
 import { ConnectionConfig, DockerContainer } from '@servercity/shared'
 
-export default function App() {
-  const { status, metrics, errorMessage, reset, fingerprintChallenge, setCommandBarVisible,
-          toggleDockerPanel, setSelectedContainer, dockerPanelVisible } = useServerStore()
+function BuildingView() {
+  const { status, metrics, errorMessage, reset, fingerprintChallenge, setCommandBarVisible } = useServerStore()
   const { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs,
-          explorePath, requestFileContent, requestDocker, requestContainerLogs, stopContainerLogs } = useWebSocket()
+          explorePath, requestFileContent } = useWebSocket()
   useKeyboardShortcuts()
   useAlerts(metrics)
 
@@ -30,7 +29,6 @@ export default function App() {
   const showScene    = !showForm || isConnecting
   const showHUD      = isConnected || status === 'disconnected' || status === 'reconnecting'
 
-  // Build floorData for the detail panel (same logic as Building.tsx)
   const subdirsByMount = useServerStore(s => s.subdirsByMount)
   const allSubdirs = metrics
     ? metrics.disk
@@ -50,14 +48,6 @@ export default function App() {
     ? allSubdirs
     : (metrics?.disk.slice(0, 5) ?? [])
 
-  // Auto-refresh Docker every 5s while panel is open and connected
-  useEffect(() => {
-    if (!dockerPanelVisible || !isConnected) return
-    requestDocker()
-    const id = setInterval(requestDocker, 5000)
-    return () => clearInterval(id)
-  }, [dockerPanelVisible, isConnected, requestDocker])
-
   const handleConnect = (config: ConnectionConfig) => connect(config)
   const handleDisconnect = () => { disconnect(); reset() }
   const handleReconnect = () => reconnect()
@@ -74,7 +64,6 @@ export default function App() {
         />
       )}
 
-      {/* 3D scene */}
       <div
         className="absolute inset-0 transition-opacity duration-700"
         style={{ opacity: showScene ? 1 : 0, pointerEvents: showScene ? 'auto' : 'none' }}
@@ -85,10 +74,7 @@ export default function App() {
           isConnecting={isConnecting}
           onExplorePath={explorePath}
           onRequestFileContent={requestFileContent}
-          onSelectContainer={(c: DockerContainer) => {
-            setSelectedContainer(c)
-            if (!dockerPanelVisible) toggleDockerPanel()
-          }}
+          onSelectContainer={(_c: DockerContainer) => {}}
         />
 
         {showHUD && (
@@ -97,24 +83,16 @@ export default function App() {
               onDisconnect={handleDisconnect}
               onReconnect={handleReconnect}
               onOpenExplorer={() => setCommandBarVisible(true)}
-              onToggleDocker={() => { toggleDockerPanel(); if (!dockerPanelVisible) requestDocker() }}
             />
             <FloorDetailPanel floorData={floorData} onRequestSubdirs={requestSubdirs} />
             <ProcessPanel onRequestPs={requestPs} />
             <AlertToast />
             <CommandBar onExplorePath={explorePath} />
             <FilePanel />
-            {dockerPanelVisible && (
-              <DockerPanel
-                onRequestLogs={requestContainerLogs}
-                onStopLogs={stopContainerLogs}
-              />
-            )}
           </>
         )}
       </div>
 
-      {/* Connect form */}
       <div
         className="absolute inset-0 transition-opacity duration-700"
         style={{ opacity: showForm ? 1 : 0, pointerEvents: showForm ? 'auto' : 'none' }}
@@ -126,5 +104,15 @@ export default function App() {
         />
       </div>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<BuildingView />} />
+      <Route path="/docker" element={<DockerPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }

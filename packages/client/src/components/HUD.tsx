@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useServerStore } from '../store/useServerStore'
 import { useLerpedMetrics } from '../hooks/useLerpedMetrics'
 import { useLastUpdated } from '../hooks/useLastUpdated'
@@ -8,7 +9,6 @@ interface Props {
   onDisconnect: () => void
   onReconnect: () => void
   onOpenExplorer?: () => void
-  onToggleDocker?: () => void
 }
 
 function formatBytes(bytes: number): string {
@@ -155,10 +155,11 @@ function IconBtn({ onClick, title, active, children }: { onClick: () => void; ti
 }
 
 // ── Main HUD ─────────────────────────────────────────────────────────────────
-export function HUD({ onDisconnect, onReconnect, onOpenExplorer, onToggleDocker }: Props) {
+export function HUD({ onDisconnect, onReconnect, onOpenExplorer }: Props) {
+  const navigate = useNavigate()
   const {
     status, hostname, metrics: rawMetrics, metricsStale, retryAttempt, retryCountdown,
-    resetCamera, serverInfo, processPanelVisible, toggleProcessPanel, dockerPanelVisible,
+    resetCamera, serverInfo, processPanelVisible, toggleProcessPanel,
   } = useServerStore()
   const metrics = useLerpedMetrics(rawMetrics)
   const secondsAgo = useLastUpdated(rawMetrics)
@@ -234,9 +235,7 @@ export function HUD({ onDisconnect, onReconnect, onOpenExplorer, onToggleDocker 
             {onOpenExplorer && (
               <IconBtn onClick={onOpenExplorer} title="File explorer (F)">⌕</IconBtn>
             )}
-            {onToggleDocker && (
-              <IconBtn onClick={onToggleDocker} title="Docker (K)" active={dockerPanelVisible}>⬡</IconBtn>
-            )}
+            <IconBtn onClick={() => navigate('/docker')} title="Docker">⬡</IconBtn>
             <button
               onClick={onDisconnect}
               style={{
