@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useServerStore } from '../store/useServerStore'
 import { useWebSocket } from '../hooks/useWebSocket'
-import { PixelRoomView } from '../components/PixelRoomView'
+import { DockerCanvas2D } from '../components/docker/DockerCanvas2D'
 import { ContainerDetail } from '../components/ContainerDetail'
 import { DockerWing } from '../scene/DockerWing'
 import { Canvas } from '@react-three/fiber'
@@ -224,7 +224,7 @@ export function DockerPage() {
                 {!dockerInfo ? 'Loading…' : 'No containers found.'}
               </div>
             ) : (
-              <PixelRoomView
+              <DockerCanvas2D
                 dockerInfo={dockerInfo}
                 onSelectContainer={handleSelectContainer}
                 selectedId={selectedContainer?.id}
