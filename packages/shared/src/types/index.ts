@@ -27,6 +27,11 @@ export interface DockerPort {
   protocol: string
 }
 
+export interface DockerMount {
+  name: string        // volume name (or bind path)
+  destination: string // mount point inside container, e.g. /data
+}
+
 export interface DockerContainer {
   id: string
   name: string
@@ -36,7 +41,7 @@ export interface DockerContainer {
   memoryMb: number
   memoryLimitMb: number
   ports: DockerPort[]
-  volumes: string[]       // volume names mounted
+  mounts: DockerMount[]   // full mount info (replaces old volumes: string[])
   networks: string[]      // network names
   restartCount: number
   envVars: Array<{ key: string; value: string }>
