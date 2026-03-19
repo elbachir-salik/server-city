@@ -27,6 +27,10 @@ export function useKeyboardShortcuts() {
         case 'F':
           if (store.status === 'connected') store.setCommandBarVisible(!store.commandBarVisible)
           break
+        case 'k':
+        case 'K':
+          if (store.status === 'connected') store.toggleDockerPanel()
+          break
         case 'd':
         case 'D':
           store.toggleDiskSidebar()

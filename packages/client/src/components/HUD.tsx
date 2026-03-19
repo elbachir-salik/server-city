@@ -8,6 +8,7 @@ interface Props {
   onDisconnect: () => void
   onReconnect: () => void
   onOpenExplorer?: () => void
+  onToggleDocker?: () => void
 }
 
 function formatBytes(bytes: number): string {
@@ -154,10 +155,10 @@ function IconBtn({ onClick, title, active, children }: { onClick: () => void; ti
 }
 
 // ── Main HUD ─────────────────────────────────────────────────────────────────
-export function HUD({ onDisconnect, onReconnect, onOpenExplorer }: Props) {
+export function HUD({ onDisconnect, onReconnect, onOpenExplorer, onToggleDocker }: Props) {
   const {
     status, hostname, metrics: rawMetrics, metricsStale, retryAttempt, retryCountdown,
-    resetCamera, serverInfo, processPanelVisible, toggleProcessPanel,
+    resetCamera, serverInfo, processPanelVisible, toggleProcessPanel, dockerPanelVisible,
   } = useServerStore()
   const metrics = useLerpedMetrics(rawMetrics)
   const secondsAgo = useLastUpdated(rawMetrics)
@@ -232,6 +233,9 @@ export function HUD({ onDisconnect, onReconnect, onOpenExplorer }: Props) {
             <IconBtn onClick={toggleProcessPanel} title="Process panel (P)" active={processPanelVisible}>⚙</IconBtn>
             {onOpenExplorer && (
               <IconBtn onClick={onOpenExplorer} title="File explorer (F)">⌕</IconBtn>
+            )}
+            {onToggleDocker && (
+              <IconBtn onClick={onToggleDocker} title="Docker (K)" active={dockerPanelVisible}>⬡</IconBtn>
             )}
             <button
               onClick={onDisconnect}

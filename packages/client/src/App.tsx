@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useServerStore } from './store/useServerStore'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
@@ -12,11 +13,14 @@ import { AlertToast } from './components/AlertToast'
 import { ProcessPanel } from './components/ProcessPanel'
 import { CommandBar } from './components/CommandBar'
 import { FilePanel } from './components/FilePanel'
-import { ConnectionConfig } from '@servercity/shared'
+import { ContainerPanel } from './components/ContainerPanel'
+import { ConnectionConfig, DockerContainer } from '@servercity/shared'
 
 export default function App() {
-  const { status, metrics, errorMessage, reset, fingerprintChallenge, setCommandBarVisible } = useServerStore()
-  const { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs, explorePath, requestFileContent } = useWebSocket()
+  const { status, metrics, errorMessage, reset, fingerprintChallenge, setCommandBarVisible,
+          toggleDockerPanel, setSelectedContainer, dockerPanelVisible } = useServerStore()
+  const { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs,
+          explorePath, requestFileContent, requestDocker, requestContainerLogs, stopContainerLogs } = useWebSocket()
   useKeyboardShortcuts()
   useAlerts(metrics)
 
@@ -46,6 +50,14 @@ export default function App() {
     ? allSubdirs
     : (metrics?.disk.slice(0, 5) ?? [])
 
+  // Auto-refresh Docker every 5s while panel is open and connected
+  useEffect(() => {
+    if (!dockerPanelVisible || !isConnected) return
+    requestDocker()
+    const id = setInterval(requestDocker, 5000)
+    return () => clearInterval(id)
+  }, [dockerPanelVisible, isConnected, requestDocker])
+
   const handleConnect = (config: ConnectionConfig) => connect(config)
   const handleDisconnect = () => { disconnect(); reset() }
   const handleReconnect = () => reconnect()
@@ -73,6 +85,10 @@ export default function App() {
           isConnecting={isConnecting}
           onExplorePath={explorePath}
           onRequestFileContent={requestFileContent}
+          onSelectContainer={(c: DockerContainer) => {
+            setSelectedContainer(c)
+            if (!dockerPanelVisible) toggleDockerPanel()
+          }}
         />
 
         {showHUD && (
@@ -81,12 +97,19 @@ export default function App() {
               onDisconnect={handleDisconnect}
               onReconnect={handleReconnect}
               onOpenExplorer={() => setCommandBarVisible(true)}
+              onToggleDocker={() => { toggleDockerPanel(); if (!dockerPanelVisible) requestDocker() }}
             />
             <FloorDetailPanel floorData={floorData} onRequestSubdirs={requestSubdirs} />
             <ProcessPanel onRequestPs={requestPs} />
             <AlertToast />
             <CommandBar onExplorePath={explorePath} />
             <FilePanel />
+            {dockerPanelVisible && (
+              <ContainerPanel
+                onRequestLogs={requestContainerLogs}
+                onStopLogs={stopContainerLogs}
+              />
+            )}
           </>
         )}
       </div>

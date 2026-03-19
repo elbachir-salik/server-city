@@ -9,6 +9,8 @@ import { SceneLights } from '../scene/SceneLights'
 import { Skyline } from '../scene/Skyline'
 import { AmbientParticles } from '../scene/AmbientParticles'
 import { FloorExplorer } from '../scene/FloorExplorer'
+import { DockerWing } from '../scene/DockerWing'
+import { DockerContainer } from '@servercity/shared'
 
 interface SceneProps {
   metrics: ServerMetrics | null
@@ -16,9 +18,10 @@ interface SceneProps {
   isConnecting?: boolean
   onExplorePath: (path: string) => void
   onRequestFileContent: (path: string) => void
+  onSelectContainer: (c: DockerContainer) => void
 }
 
-export function Scene({ metrics, connected, isConnecting = false, onExplorePath, onRequestFileContent }: SceneProps) {
+export function Scene({ metrics, connected, isConnecting = false, onExplorePath, onRequestFileContent, onSelectContainer }: SceneProps) {
   const cpuPercent    = metrics?.cpu.overall ?? 0
   const memPercent    = metrics?.memory.usedPercent ?? 0
   const selectedFloor = useServerStore(s => s.selectedFloor)
@@ -41,6 +44,7 @@ export function Scene({ metrics, connected, isConnecting = false, onExplorePath,
             onExplorePath={onExplorePath}
             onRequestFileContent={onRequestFileContent}
           />
+          <DockerWing onSelectContainer={onSelectContainer} />
         </>
       ) : (
         <IdleBuilding connecting={isConnecting} />
