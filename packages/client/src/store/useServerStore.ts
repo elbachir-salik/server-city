@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { ServerMetrics, ConnectionConfig, SubdirEntry, ProcessEntry, ServerInfo, DirectoryNode, FileContent } from '@servercity/shared'
+import { ServerMetrics, ConnectionConfig, SubdirEntry, ProcessEntry, ServerInfo, DirectoryNode, FileContent, DockerInfo, DockerContainer } from '@servercity/shared'
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error'
 
@@ -63,6 +63,13 @@ interface ServerStore {
   alertLog: Alert[]
   processPanelVisible: boolean
 
+  // ── Docker ────────────────────────────────────────────────────────────────
+  dockerInfo: DockerInfo | null
+  dockerPanelVisible: boolean
+  selectedContainer: DockerContainer | null
+  containerLogs: Record<string, string[]>   // id → lines[]
+  containerLogsActive: string | null         // id currently streaming
+
   // ── Spatial File Explorer ──────────────────────────────────────────────────
   explorerPath: string | null
   explorerNodes: DirectoryNode[]
@@ -92,6 +99,14 @@ interface ServerStore {
   addAlert: (a: Alert) => void
   removeAlert: (id: string) => void
   toggleProcessPanel: () => void
+
+  // ── Docker ────────────────────────────────────────────────────────────────
+  setDockerInfo: (info: DockerInfo) => void
+  toggleDockerPanel: () => void
+  setSelectedContainer: (c: DockerContainer | null) => void
+  appendContainerLog: (id: string, line: string, isError: boolean) => void
+  clearContainerLogs: (id: string) => void
+  setContainerLogsActive: (id: string | null) => void
 
   // ── Spatial File Explorer ──────────────────────────────────────────────────
   setExplorerPath: (path: string | null) => void
@@ -127,6 +142,12 @@ export const useServerStore = create<ServerStore>((set) => ({
   serverInfo: null,
   alertLog: [],
   processPanelVisible: false,
+
+  dockerInfo: null,
+  dockerPanelVisible: false,
+  selectedContainer: null,
+  containerLogs: {},
+  containerLogsActive: null,
 
   explorerPath: null,
   explorerNodes: [],
@@ -170,6 +191,21 @@ export const useServerStore = create<ServerStore>((set) => ({
   addAlert: (a) => set((s) => ({ alertLog: [...s.alertLog.slice(-19), a] })),
   removeAlert: (id) => set((s) => ({ alertLog: s.alertLog.filter(a => a.id !== id) })),
   toggleProcessPanel: () => set((s) => ({ processPanelVisible: !s.processPanelVisible })),
+
+  setDockerInfo: (dockerInfo) => set({ dockerInfo }),
+  toggleDockerPanel: () => set((s) => ({ dockerPanelVisible: !s.dockerPanelVisible })),
+  setSelectedContainer: (selectedContainer) => set({ selectedContainer }),
+  appendContainerLog: (id, line, isError) =>
+    set((s) => {
+      const prev = s.containerLogs[id] ?? []
+      const formatted = isError ? `\x1b[31m${line}\x1b[0m` : line
+      // Keep max 200 lines
+      const next = [...prev, formatted].slice(-200)
+      return { containerLogs: { ...s.containerLogs, [id]: next } }
+    }),
+  clearContainerLogs: (id) =>
+    set((s) => ({ containerLogs: { ...s.containerLogs, [id]: [] } })),
+  setContainerLogsActive: (containerLogsActive) => set({ containerLogsActive }),
 
   setExplorerPath: (explorerPath) => set({ explorerPath, explorerError: null }),
   setExplorerNodes: (path, nodes) =>
@@ -225,6 +261,11 @@ export const useServerStore = create<ServerStore>((set) => ({
       processes: [],
       serverInfo: null,
       processPanelVisible: false,
+      dockerInfo: null,
+      dockerPanelVisible: false,
+      selectedContainer: null,
+      containerLogs: {},
+      containerLogsActive: null,
       explorerPath: null,
       explorerNodes: [],
       explorerBreadcrumbs: [],

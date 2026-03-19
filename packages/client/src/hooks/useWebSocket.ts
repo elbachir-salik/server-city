@@ -23,7 +23,7 @@ export function useWebSocket() {
     setStatus, setHostname, setMetrics, setMetricsStale,
     setError, setLastConfig, setRetry, setFingerprintChallenge, setSubdirs,
     setProcesses, setServerInfo, setExplorerNodes, setExplorerError, setFilePanel,
-    setFilePanelLoading,
+    setFilePanelLoading, setDockerInfo, appendContainerLog, setContainerLogsActive,
   } = useServerStore()
 
   const clearTimers = useCallback(() => {
@@ -94,6 +94,12 @@ export function useWebSocket() {
       } else if (msg.type === 'file_content_error') {
         setFilePanelLoading(false)
         setExplorerError(msg.payload.error)
+      } else if (msg.type === 'docker_result') {
+        setDockerInfo(msg.payload)
+      } else if (msg.type === 'container_log_line') {
+        appendContainerLog(msg.payload.id, msg.payload.line, msg.payload.isError)
+      } else if (msg.type === 'container_logs_end') {
+        setContainerLogsActive(null)
       }
     }
 
@@ -143,7 +149,7 @@ export function useWebSocket() {
         }, delayMs)
       }
     }
-  }, [setStatus, setHostname, setMetrics, setMetricsStale, setError, setRetry, resetStaleTimer, clearTimers, setFingerprintChallenge, setSubdirs, setProcesses, setServerInfo, setExplorerNodes, setExplorerError, setFilePanel, setFilePanelLoading])
+  }, [setStatus, setHostname, setMetrics, setMetricsStale, setError, setRetry, resetStaleTimer, clearTimers, setFingerprintChallenge, setSubdirs, setProcesses, setServerInfo, setExplorerNodes, setExplorerError, setFilePanel, setFilePanelLoading, setDockerInfo, appendContainerLog, setContainerLogsActive])
 
   const connect = useCallback((config: ConnectionConfig) => {
     intentionalRef.current = false
@@ -199,6 +205,30 @@ export function useWebSocket() {
     }
   }, [])
 
+  const requestDocker = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg: WSClientMessage = { type: 'request_docker' }
+      wsRef.current.send(JSON.stringify(msg))
+    }
+  }, [])
+
+  const requestContainerLogs = useCallback((id: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      useServerStore.getState().clearContainerLogs(id)
+      useServerStore.getState().setContainerLogsActive(id)
+      const msg: WSClientMessage = { type: 'request_container_logs', payload: { id } }
+      wsRef.current.send(JSON.stringify(msg))
+    }
+  }, [])
+
+  const stopContainerLogs = useCallback((id: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg: WSClientMessage = { type: 'stop_container_logs', payload: { id } }
+      wsRef.current.send(JSON.stringify(msg))
+    }
+    useServerStore.getState().setContainerLogsActive(null)
+  }, [])
+
   const explorePath = useCallback((path: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       const msg: WSClientMessage = { type: 'explore_path', payload: { path } }
@@ -218,5 +248,5 @@ export function useWebSocket() {
 
   useEffect(() => () => disconnect(), [disconnect])
 
-  return { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs, explorePath, requestFileContent }
+  return { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs, explorePath, requestFileContent, requestDocker, requestContainerLogs, stopContainerLogs }
 }
