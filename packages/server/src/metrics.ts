@@ -1,4 +1,4 @@
-import { ServerMetrics, SubdirEntry, ProcessEntry, ServerInfo, DirectoryNode, FileContent } from '@servercity/shared'
+import { ServerMetrics, SubdirEntry, ProcessEntry, ServerInfo, DirectoryNode, FileContent, DockerContainer, DockerVolume, DockerNetwork, DockerInfo, ContainerStatus, DockerPort } from '@servercity/shared'
 
 // ── CPU ───────────────────────────────────────────────────────────────────────
 export function parseCPU(raw: string): { overall: number; cores: number[] } {
@@ -281,6 +281,176 @@ export function parseFileContent(raw: string, path: string): FileContent {
     mtimeSec: mtime,
     content,
   }
+}
+
+// ── Docker ────────────────────────────────────────────────────────────────────
+
+function parsePercent(s: string): number {
+  return parseFloat(s.replace('%', '')) || 0
+}
+
+function parseMiB(s: string): number {
+  // "256MiB / 4GiB" → 256 or "1.5GiB" → 1536
+  const val = parseFloat(s)
+  if (isNaN(val)) return 0
+  const u = s.replace(/[0-9. ]/g, '').toLowerCase()
+  if (u.startsWith('g')) return val * 1024
+  if (u.startsWith('t')) return val * 1024 * 1024
+  return val // MiB
+}
+
+function parseDockerPorts(raw: string): DockerPort[] {
+  // e.g. "0.0.0.0:8080->80/tcp, 0.0.0.0:443->443/tcp"
+  const ports: DockerPort[] = []
+  if (!raw) return ports
+  for (const part of raw.split(',')) {
+    const m = part.trim().match(/:(\d+)->(\d+)\/(\w+)/)
+    if (m) {
+      ports.push({ host: parseInt(m[1], 10), container: parseInt(m[2], 10), protocol: m[3] })
+    }
+  }
+  return ports
+}
+
+/** Parse combined docker output (4 NDJSON sections separated by ---SEP---). */
+export function parseDockerData(
+  psRaw: string,
+  statsRaw: string,
+  volumesRaw: string,
+  networksRaw: string,
+  inspectRaw: string,
+): DockerInfo {
+  // Parse docker ps -a --format '{{json .}}'
+  const psItems: Record<string, unknown>[] = []
+  for (const line of psRaw.trim().split('\n')) {
+    const l = line.trim()
+    if (!l || !l.startsWith('{')) continue
+    try { psItems.push(JSON.parse(l)) } catch { /* skip */ }
+  }
+
+  // Parse docker stats --no-stream --format '{{json .}}'
+  const statsMap = new Map<string, Record<string, unknown>>()
+  for (const line of statsRaw.trim().split('\n')) {
+    const l = line.trim()
+    if (!l || !l.startsWith('{')) continue
+    try {
+      const s = JSON.parse(l) as Record<string, unknown>
+      const id = (s['ID'] ?? s['Container'] ?? '') as string
+      if (id) statsMap.set(id.slice(0, 12), s)
+    } catch { /* skip */ }
+  }
+
+  // Parse docker inspect JSON array
+  const inspectMap = new Map<string, Record<string, unknown>>()
+  try {
+    const arr = JSON.parse(inspectRaw.trim() || '[]') as Record<string, unknown>[]
+    for (const item of arr) {
+      const id = (item['Id'] as string ?? '').slice(0, 12)
+      if (id) inspectMap.set(id, item)
+    }
+  } catch { /* ignore */ }
+
+  // Build containers
+  const containers: DockerContainer[] = psItems.map(ps => {
+    const id = ((ps['ID'] ?? ps['Id'] ?? '') as string).slice(0, 12)
+    const statsEntry = statsMap.get(id) ?? {}
+    const inspectEntry = inspectMap.get(id)
+
+    const cpuStr = (statsEntry['CPUPerc'] ?? '0%') as string
+    const memStr = (statsEntry['MemUsage'] ?? '0MiB / 0MiB') as string
+    const [memUsed, memLimit] = memStr.split('/').map(s => parseMiB(s.trim()))
+
+    // Ports from ps output
+    const ports = parseDockerPorts((ps['Ports'] ?? '') as string)
+
+    // Networks from ps output
+    const networks = ((ps['Networks'] ?? '') as string).split(',').map(s => s.trim()).filter(Boolean)
+
+    // Volumes + env vars from inspect
+    const volumes: string[] = []
+    const envVars: Array<{ key: string; value: string }> = []
+    let restartCount = 0
+    if (inspectEntry) {
+      const mounts = (inspectEntry['Mounts'] as Array<Record<string, unknown>> | undefined) ?? []
+      for (const m of mounts) {
+        if (m['Name']) volumes.push(m['Name'] as string)
+        else if (m['Source']) volumes.push(m['Source'] as string)
+      }
+      const env = ((inspectEntry['Config'] as Record<string, unknown> | undefined)?.['Env'] ?? []) as string[]
+      for (const e of env) {
+        const eq = e.indexOf('=')
+        if (eq > 0) envVars.push({ key: e.slice(0, eq), value: e.slice(eq + 1) })
+      }
+      const state = (inspectEntry['State'] as Record<string, unknown> | undefined) ?? {}
+      restartCount = (state['RestartCount'] as number | undefined) ?? 0
+    }
+
+    const rawStatus = ((ps['State'] ?? ps['Status'] ?? 'exited') as string).toLowerCase()
+    const validStatuses: ContainerStatus[] = ['running', 'paused', 'exited', 'dead', 'created', 'restarting']
+    const status: ContainerStatus = validStatuses.includes(rawStatus as ContainerStatus)
+      ? (rawStatus as ContainerStatus)
+      : 'exited'
+
+    return {
+      id,
+      name: ((ps['Names'] ?? '') as string).replace(/^\//, ''),
+      image: (ps['Image'] ?? '') as string,
+      status,
+      cpuPercent: parsePercent(cpuStr),
+      memoryMb: memUsed,
+      memoryLimitMb: memLimit || 0,
+      ports,
+      volumes,
+      networks,
+      restartCount,
+      envVars,
+    }
+  })
+
+  // Volumes
+  const volumes: DockerVolume[] = []
+  for (const line of volumesRaw.trim().split('\n')) {
+    const l = line.trim()
+    if (!l || !l.startsWith('{')) continue
+    try {
+      const v = JSON.parse(l) as Record<string, unknown>
+      const name = (v['Name'] ?? '') as string
+      if (name) {
+        volumes.push({
+          name,
+          mountpoint: (v['Mountpoint'] ?? '') as string,
+          sizeMb: 0,
+        })
+      }
+    } catch { /* skip */ }
+  }
+
+  // Networks
+  const networks: DockerNetwork[] = []
+  const netContainers = new Map<string, string[]>()
+  for (const c of containers) {
+    for (const n of c.networks) {
+      if (!netContainers.has(n)) netContainers.set(n, [])
+      netContainers.get(n)!.push(c.id)
+    }
+  }
+  for (const line of networksRaw.trim().split('\n')) {
+    const l = line.trim()
+    if (!l || !l.startsWith('{')) continue
+    try {
+      const n = JSON.parse(l) as Record<string, unknown>
+      const name = (n['Name'] ?? '') as string
+      if (name) {
+        networks.push({
+          name,
+          driver: (n['Driver'] ?? 'bridge') as string,
+          containers: netContainers.get(name) ?? [],
+        })
+      }
+    } catch { /* skip */ }
+  }
+
+  return { available: true, containers, volumes, networks }
 }
 
 // ── Builder ───────────────────────────────────────────────────────────────────

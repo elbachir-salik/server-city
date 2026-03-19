@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { Client } from 'ssh2'
-import { ConnectionConfig, ServerMetrics, ProcessEntry, ServerInfo, DirectoryNode, FileContent } from '@servercity/shared'
-import { buildMetrics, parseDirUsage, parseProcessList, parseServerInfo, parseExploreResult, parseFileContent } from './metrics'
+import { ConnectionConfig, ServerMetrics, ProcessEntry, ServerInfo, DirectoryNode, FileContent, DockerInfo } from '@servercity/shared'
+import { buildMetrics, parseDirUsage, parseProcessList, parseServerInfo, parseExploreResult, parseFileContent, parseDockerData } from './metrics'
 import { friendlySSHError } from './errorMessages'
 import { SubdirEntry } from '@servercity/shared'
 
@@ -28,6 +28,7 @@ export class SSHSession {
   private lastMetrics: ServerMetrics | null = null
   private alive = false
   private readonly exploreCache = new Map<string, { nodes: DirectoryNode[]; timestamp: number }>()
+  private readonly logStreams = new Map<string, NodeJS.ReadableStream>()
 
   constructor(
     private config: ConnectionConfig,
@@ -254,9 +255,122 @@ export class SSHSession {
     })
   }
 
+  /** Check if docker is available and the user has permission. */
+  checkDockerAvailable(cb: (info: { available: boolean; reason?: string }) => void) {
+    if (!this.alive) { cb({ available: false, reason: 'not_connected' }); return }
+    this.execCommand('docker info --format "{{.ServerVersion}}" 2>&1; echo "EXIT:$?"', (err, output) => {
+      if (err) { cb({ available: false, reason: 'exec_error' }); return }
+      if (output.includes('EXIT:0')) {
+        cb({ available: true })
+      } else if (/permission denied|Got permission denied|connect: permission denied/i.test(output)) {
+        cb({ available: false, reason: 'permission_denied' })
+      } else if (/command not found|No such file/i.test(output)) {
+        cb({ available: false, reason: 'not_installed' })
+      } else {
+        cb({ available: false, reason: 'daemon_not_running' })
+      }
+    })
+  }
+
+  /** Fetch full Docker info (ps + stats + volumes + networks + inspect). */
+  getDockerInfo(cb: (info: DockerInfo) => void) {
+    if (!this.alive) { cb({ available: false, containers: [], volumes: [], networks: [] }); return }
+
+    const SEP = '---DOCKER_SEP---'
+    // Single compound command: all 4 listing commands + inspect
+    const cmd = [
+      `docker ps -a --format '{{json .}}' 2>/dev/null`,
+      `printf '\\n${SEP}\\n'`,
+      `docker stats --no-stream --format '{{json .}}' 2>/dev/null`,
+      `printf '\\n${SEP}\\n'`,
+      `docker volume ls --format '{{json .}}' 2>/dev/null`,
+      `printf '\\n${SEP}\\n'`,
+      `docker network ls --format '{{json .}}' 2>/dev/null`,
+      `printf '\\n${SEP}\\n'`,
+      `IDS=$(docker ps -aq 2>/dev/null); if [ -n "$IDS" ]; then docker inspect $IDS 2>/dev/null; else echo '[]'; fi`,
+    ].join('; ')
+
+    this.execCommand(cmd, (err, output) => {
+      if (err) { cb({ available: false, reason: 'exec_error', containers: [], volumes: [], networks: [] }); return }
+
+      const trimmed = output.trim()
+      if (!trimmed || /command not found|No such file/i.test(trimmed)) {
+        cb({ available: false, reason: 'not_installed', containers: [], volumes: [], networks: [] })
+        return
+      }
+      if (/permission denied|Got permission denied/i.test(trimmed)) {
+        cb({ available: false, reason: 'permission_denied', containers: [], volumes: [], networks: [] })
+        return
+      }
+
+      const parts = trimmed.split(SEP)
+      try {
+        const result = parseDockerData(
+          parts[0] ?? '',
+          parts[1] ?? '',
+          parts[2] ?? '',
+          parts[3] ?? '',
+          parts[4] ?? '[]',
+        )
+        cb(result)
+      } catch (e) {
+        console.error('[docker] parse error:', e)
+        cb({ available: true, containers: [], volumes: [], networks: [] })
+      }
+    })
+  }
+
+  /** Stream docker logs for a container. Returns true if started. */
+  streamContainerLogs(
+    containerId: string,
+    onLine: (line: string, isError: boolean) => void,
+    onEnd: () => void,
+  ) {
+    if (!this.alive) { onEnd(); return }
+    // Stop any existing stream for this container
+    this.stopContainerLogs(containerId)
+
+    // Sanitize container ID — only hex chars (docker short IDs are 12 hex chars)
+    const safeId = containerId.slice(0, 64).replace(/[^a-zA-Z0-9_-]/g, '')
+    if (!safeId) { onEnd(); return }
+
+    const cmd = `docker logs --tail 100 --follow ${safeId} 2>&1`
+
+    this.client.exec(cmd, (err, stream) => {
+      if (err) { onEnd(); return }
+
+      this.logStreams.set(containerId, stream)
+      let buf = ''
+
+      stream.on('data', (chunk: Buffer) => {
+        buf += chunk.toString()
+        const parts = buf.split('\n')
+        buf = parts.pop() ?? ''
+        for (const line of parts) {
+          onLine(line, /\berror\b|\bfatal\b|\bcritical\b/i.test(line))
+        }
+      })
+      stream.on('close', () => {
+        if (buf.trim()) onLine(buf, false)
+        this.logStreams.delete(containerId)
+        onEnd()
+      })
+    })
+  }
+
+  stopContainerLogs(containerId: string) {
+    const stream = this.logStreams.get(containerId)
+    if (stream) {
+      try { (stream as { destroy?: () => void }).destroy?.() } catch { /* ignore */ }
+      this.logStreams.delete(containerId)
+    }
+  }
+
   disconnect() {
     this.alive = false
     this.stopPolling()
+    // Stop all active log streams
+    for (const id of this.logStreams.keys()) this.stopContainerLogs(id)
     this.client.end()
   }
 }

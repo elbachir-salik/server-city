@@ -18,6 +18,50 @@ export interface FileContent {
   content: string
 }
 
+// ── Docker ────────────────────────────────────────────────────────────────────
+export type ContainerStatus = 'running' | 'paused' | 'exited' | 'dead' | 'created' | 'restarting'
+
+export interface DockerPort {
+  host: number
+  container: number
+  protocol: string
+}
+
+export interface DockerContainer {
+  id: string
+  name: string
+  image: string
+  status: ContainerStatus
+  cpuPercent: number
+  memoryMb: number
+  memoryLimitMb: number
+  ports: DockerPort[]
+  volumes: string[]       // volume names mounted
+  networks: string[]      // network names
+  restartCount: number
+  envVars: Array<{ key: string; value: string }>
+}
+
+export interface DockerVolume {
+  name: string
+  mountpoint: string
+  sizeMb: number
+}
+
+export interface DockerNetwork {
+  name: string
+  driver: string
+  containers: string[]   // container ids
+}
+
+export interface DockerInfo {
+  available: boolean
+  reason?: string
+  containers: DockerContainer[]
+  volumes: DockerVolume[]
+  networks: DockerNetwork[]
+}
+
 export interface ProcessEntry {
   pid: number
   user: string
@@ -85,6 +129,9 @@ export type WSMessage =
   | { type: 'explore_error'; payload: { path: string; error: 'not_found' | 'permission_denied' | 'is_file' } }
   | { type: 'file_content_result'; payload: FileContent }
   | { type: 'file_content_error'; payload: { path: string; error: 'not_found' | 'permission_denied' | 'is_dir' } }
+  | { type: 'docker_result'; payload: DockerInfo }
+  | { type: 'container_log_line'; payload: { id: string; line: string; isError: boolean } }
+  | { type: 'container_logs_end'; payload: { id: string } }
 
 export type WSClientMessage =
   | { type: 'connect'; payload: ConnectionConfig }
@@ -95,3 +142,6 @@ export type WSClientMessage =
   | { type: 'request_server_info' }
   | { type: 'explore_path'; payload: { path: string } }
   | { type: 'request_file_content'; payload: { path: string } }
+  | { type: 'request_docker' }
+  | { type: 'request_container_logs'; payload: { id: string } }
+  | { type: 'stop_container_logs'; payload: { id: string } }
