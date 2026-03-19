@@ -66,6 +66,7 @@ interface ServerStore {
   // ── Docker ────────────────────────────────────────────────────────────────
   dockerInfo: DockerInfo | null
   dockerPanelVisible: boolean
+  dockerView: '2d' | '3d'
   selectedContainer: DockerContainer | null
   containerLogs: Record<string, string[]>   // id → lines[]
   containerLogsActive: string | null         // id currently streaming
@@ -103,6 +104,7 @@ interface ServerStore {
   // ── Docker ────────────────────────────────────────────────────────────────
   setDockerInfo: (info: DockerInfo) => void
   toggleDockerPanel: () => void
+  setDockerView: (view: '2d' | '3d') => void
   setSelectedContainer: (c: DockerContainer | null) => void
   appendContainerLog: (id: string, line: string, isError: boolean) => void
   clearContainerLogs: (id: string) => void
@@ -145,6 +147,7 @@ export const useServerStore = create<ServerStore>((set) => ({
 
   dockerInfo: null,
   dockerPanelVisible: false,
+  dockerView: '2d',
   selectedContainer: null,
   containerLogs: {},
   containerLogsActive: null,
@@ -194,6 +197,7 @@ export const useServerStore = create<ServerStore>((set) => ({
 
   setDockerInfo: (dockerInfo) => set({ dockerInfo }),
   toggleDockerPanel: () => set((s) => ({ dockerPanelVisible: !s.dockerPanelVisible })),
+  setDockerView: (dockerView) => set({ dockerView }),
   setSelectedContainer: (selectedContainer) => set({ selectedContainer }),
   appendContainerLog: (id, line, isError) =>
     set((s) => {
@@ -263,6 +267,7 @@ export const useServerStore = create<ServerStore>((set) => ({
       processPanelVisible: false,
       dockerInfo: null,
       dockerPanelVisible: false,
+      dockerView: '2d',
       selectedContainer: null,
       containerLogs: {},
       containerLogsActive: null,
