@@ -3,6 +3,21 @@ export interface SubdirEntry {
   usedGb: number
 }
 
+export interface DirectoryNode {
+  name: string
+  path: string
+  sizeMb: number
+  isDirectory: boolean
+  lastModifiedDays: number
+}
+
+export interface FileContent {
+  path: string
+  sizeMb: number
+  mtimeSec: number
+  content: string
+}
+
 export interface ProcessEntry {
   pid: number
   user: string
@@ -66,6 +81,10 @@ export type WSMessage =
   | { type: 'subdirs_result'; payload: { mount: string; subdirs: SubdirEntry[] } }
   | { type: 'ps_result'; payload: { processes: ProcessEntry[] } }
   | { type: 'server_info'; payload: ServerInfo }
+  | { type: 'explore_result'; payload: { path: string; nodes: DirectoryNode[] } }
+  | { type: 'explore_error'; payload: { path: string; error: 'not_found' | 'permission_denied' | 'is_file' } }
+  | { type: 'file_content_result'; payload: FileContent }
+  | { type: 'file_content_error'; payload: { path: string; error: 'not_found' | 'permission_denied' | 'is_dir' } }
 
 export type WSClientMessage =
   | { type: 'connect'; payload: ConnectionConfig }
@@ -74,3 +93,5 @@ export type WSClientMessage =
   | { type: 'request_subdirs'; payload: { mount: string } }
   | { type: 'request_ps' }
   | { type: 'request_server_info' }
+  | { type: 'explore_path'; payload: { path: string } }
+  | { type: 'request_file_content'; payload: { path: string } }

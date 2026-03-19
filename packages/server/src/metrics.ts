@@ -1,4 +1,4 @@
-import { ServerMetrics, SubdirEntry, ProcessEntry, ServerInfo } from '@servercity/shared'
+import { ServerMetrics, SubdirEntry, ProcessEntry, ServerInfo, DirectoryNode, FileContent } from '@servercity/shared'
 
 // ── CPU ───────────────────────────────────────────────────────────────────────
 export function parseCPU(raw: string): { overall: number; cores: number[] } {
@@ -208,6 +208,79 @@ export function parseServerInfo(raw: string): ServerInfo {
   const os = lines[1]?.trim() ?? 'Linux'
   const uptime = lines.slice(2).join(' ').trim()
   return { kernel, os, uptime }
+}
+
+// ── Directory explore (from du -k + find -printf) ────────────────────────────
+export function parseExploreResult(duRaw: string, findRaw: string): DirectoryNode[] {
+  const nowSec = Date.now() / 1000
+
+  // find output: name\ttype\tepoch_float per line
+  const findMap = new Map<string, { isDirectory: boolean; mtime: number }>()
+  for (const line of findRaw.trim().split('\n')) {
+    if (!line.trim()) continue
+    const parts = line.split('\t')
+    if (parts.length < 3) continue
+    const name = parts[0].trim()
+    const type = parts[1].trim()
+    const mtime = parseFloat(parts[2])
+    if (!name || isNaN(mtime)) continue
+    findMap.set(name, { isDirectory: type === 'd', mtime })
+  }
+
+  // du output: KB\tpath per line — first line is total for the dir itself (skip)
+  const nodes: DirectoryNode[] = []
+  const lines = duRaw.trim().split('\n').slice(1)
+  for (const line of lines) {
+    const tab = line.indexOf('\t')
+    if (tab === -1) continue
+    const kb = parseInt(line.slice(0, tab), 10)
+    const fullPath = line.slice(tab + 1).trim()
+    if (isNaN(kb) || !fullPath) continue
+    const name = fullPath.split('/').pop() ?? ''
+    if (!name || name === '.' || name === '..') continue
+    const findInfo = findMap.get(name)
+    const lastModifiedDays = findInfo ? (nowSec - findInfo.mtime) / 86400 : 30
+    nodes.push({
+      name,
+      path: fullPath,
+      sizeMb: kb / 1024,
+      isDirectory: findInfo?.isDirectory ?? false,
+      lastModifiedDays: Math.max(0, lastModifiedDays),
+    })
+  }
+
+  // Fill in items from find that weren't in du (size=0 files)
+  for (const [name, info] of findMap) {
+    if (!nodes.find(n => n.name === name) && name !== '.' && name !== '..') {
+      nodes.push({
+        name,
+        path: '', // will be set by caller if needed
+        sizeMb: 0,
+        isDirectory: info.isDirectory,
+        lastModifiedDays: Math.max(0, (nowSec - info.mtime) / 86400),
+      })
+    }
+  }
+
+  return nodes.sort((a, b) => b.sizeMb - a.sizeMb).slice(0, 40)
+}
+
+// ── File content (from stat + tail) ──────────────────────────────────────────
+export function parseFileContent(raw: string, path: string): FileContent {
+  const sepIdx = raw.indexOf('---SEP---')
+  const statLine = sepIdx >= 0 ? raw.slice(0, sepIdx).trim() : ''
+  const content = sepIdx >= 0 ? raw.slice(sepIdx + 9).trim() : raw.trim()
+
+  const statParts = statLine.split(/\s+/)
+  const sizeBytes = parseInt(statParts[0], 10) || 0
+  const mtime = parseInt(statParts[1], 10) || 0
+
+  return {
+    path,
+    sizeMb: sizeBytes / (1024 * 1024),
+    mtimeSec: mtime,
+    content,
+  }
 }
 
 // ── Builder ───────────────────────────────────────────────────────────────────
