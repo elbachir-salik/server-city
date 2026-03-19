@@ -105,18 +105,14 @@ export function ContainerPanel({ onRequestLogs, onStopLogs }: ContainerPanelProp
 
   return (
     <div style={{
-      position: 'absolute',
-      right: 0,
-      top: 0,
-      bottom: 0,
-      width: 400,
+      position: 'relative',
+      width: '100%',
+      height: '100%',
       background: 'rgba(2,4,24,0.97)',
-      borderLeft: '1px solid #1e293b',
       display: 'flex',
       flexDirection: 'column',
       fontFamily: 'monospace',
       fontSize: 12,
-      zIndex: 40,
       animation: 'slideInRight 0.2s ease-out',
     }}>
       {/* Header */}

@@ -13,7 +13,7 @@ import { AlertToast } from './components/AlertToast'
 import { ProcessPanel } from './components/ProcessPanel'
 import { CommandBar } from './components/CommandBar'
 import { FilePanel } from './components/FilePanel'
-import { ContainerPanel } from './components/ContainerPanel'
+import { DockerPanel } from './components/DockerPanel'
 import { ConnectionConfig, DockerContainer } from '@servercity/shared'
 
 export default function App() {
@@ -105,7 +105,7 @@ export default function App() {
             <CommandBar onExplorePath={explorePath} />
             <FilePanel />
             {dockerPanelVisible && (
-              <ContainerPanel
+              <DockerPanel
                 onRequestLogs={requestContainerLogs}
                 onStopLogs={stopContainerLogs}
               />
