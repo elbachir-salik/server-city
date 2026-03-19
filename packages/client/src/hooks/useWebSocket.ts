@@ -22,7 +22,8 @@ export function useWebSocket() {
   const {
     setStatus, setHostname, setMetrics, setMetricsStale,
     setError, setLastConfig, setRetry, setFingerprintChallenge, setSubdirs,
-    setProcesses, setServerInfo,
+    setProcesses, setServerInfo, setExplorerNodes, setExplorerError, setFilePanel,
+    setFilePanelLoading,
   } = useServerStore()
 
   const clearTimers = useCallback(() => {
@@ -83,6 +84,16 @@ export function useWebSocket() {
         setProcesses(msg.payload.processes)
       } else if (msg.type === 'server_info') {
         setServerInfo(msg.payload)
+      } else if (msg.type === 'explore_result') {
+        setExplorerNodes(msg.payload.path, msg.payload.nodes)
+      } else if (msg.type === 'explore_error') {
+        setExplorerError(msg.payload.error)
+      } else if (msg.type === 'file_content_result') {
+        setFilePanel(msg.payload)
+        setFilePanelLoading(false)
+      } else if (msg.type === 'file_content_error') {
+        setFilePanelLoading(false)
+        setExplorerError(msg.payload.error)
       }
     }
 
@@ -132,7 +143,7 @@ export function useWebSocket() {
         }, delayMs)
       }
     }
-  }, [setStatus, setHostname, setMetrics, setMetricsStale, setError, setRetry, resetStaleTimer, clearTimers, setFingerprintChallenge, setSubdirs, setProcesses, setServerInfo])
+  }, [setStatus, setHostname, setMetrics, setMetricsStale, setError, setRetry, resetStaleTimer, clearTimers, setFingerprintChallenge, setSubdirs, setProcesses, setServerInfo, setExplorerNodes, setExplorerError, setFilePanel, setFilePanelLoading])
 
   const connect = useCallback((config: ConnectionConfig) => {
     intentionalRef.current = false
@@ -188,7 +199,24 @@ export function useWebSocket() {
     }
   }, [])
 
+  const explorePath = useCallback((path: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg: WSClientMessage = { type: 'explore_path', payload: { path } }
+      wsRef.current.send(JSON.stringify(msg))
+      useServerStore.getState().setExplorerLoading(true)
+      useServerStore.getState().setExplorerError(null)
+    }
+  }, [])
+
+  const requestFileContent = useCallback((path: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg: WSClientMessage = { type: 'request_file_content', payload: { path } }
+      wsRef.current.send(JSON.stringify(msg))
+      useServerStore.getState().setFilePanelLoading(true)
+    }
+  }, [])
+
   useEffect(() => () => disconnect(), [disconnect])
 
-  return { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs }
+  return { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs, explorePath, requestFileContent }
 }
