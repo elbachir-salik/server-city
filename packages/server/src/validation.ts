@@ -117,11 +117,18 @@ export function validateWSClientMessage(raw: unknown): raw is WSClientMessage {
     return typeof msg.payload === 'object' && msg.payload !== null &&
       isValidMountPath((msg.payload as Record<string, unknown>).path)
   }
+  if (msg.type === 'request_container_logs' || msg.type === 'stop_container_logs') {
+    const id = typeof msg.payload === 'object' && msg.payload !== null
+      ? (msg.payload as Record<string, unknown>).id
+      : null
+    return typeof id === 'string' && id.length > 0 && id.length <= 64 && /^[a-zA-Z0-9_-]+$/.test(id)
+  }
   return (
     msg.type === 'connect' ||
     msg.type === 'disconnect' ||
     msg.type === 'fingerprint_response' ||
     msg.type === 'request_ps' ||
-    msg.type === 'request_server_info'
+    msg.type === 'request_server_info' ||
+    msg.type === 'request_docker'
   )
 }

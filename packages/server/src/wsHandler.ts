@@ -175,6 +175,30 @@ export function handleWSConnection(ws: WebSocket) {
         }
       })
     }
+
+    if (msg.type === 'request_docker') {
+      if (!session) {
+        send({ type: 'error', payload: { message: 'Not connected to a server.' } })
+        return
+      }
+      session.getDockerInfo((info) => {
+        send({ type: 'docker_result', payload: info })
+      })
+    }
+
+    if (msg.type === 'request_container_logs') {
+      if (!session) return
+      const { id } = msg.payload
+      session.streamContainerLogs(
+        id,
+        (line, isError) => send({ type: 'container_log_line', payload: { id, line, isError } }),
+        () => send({ type: 'container_logs_end', payload: { id } }),
+      )
+    }
+
+    if (msg.type === 'stop_container_logs') {
+      session?.stopContainerLogs(msg.payload.id)
+    }
   })
 
   ws.on('close', () => {
