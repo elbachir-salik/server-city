@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { ServerMetrics, ConnectionConfig, SubdirEntry, ProcessEntry, ServerInfo } from '@servercity/shared'
+import { ServerMetrics, ConnectionConfig, SubdirEntry, ProcessEntry, ServerInfo, DirectoryNode, FileContent } from '@servercity/shared'
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error'
 
@@ -63,6 +63,16 @@ interface ServerStore {
   alertLog: Alert[]
   processPanelVisible: boolean
 
+  // ── Spatial File Explorer ──────────────────────────────────────────────────
+  explorerPath: string | null
+  explorerNodes: DirectoryNode[]
+  explorerBreadcrumbs: string[]
+  explorerLoading: boolean
+  explorerError: string | null
+  filePanel: FileContent | null
+  filePanelLoading: boolean
+  commandBarVisible: boolean
+
   setStatus: (s: ConnectionStatus) => void
   setHostname: (h: string) => void
   setMetrics: (m: ServerMetrics) => void
@@ -82,6 +92,19 @@ interface ServerStore {
   addAlert: (a: Alert) => void
   removeAlert: (id: string) => void
   toggleProcessPanel: () => void
+
+  // ── Spatial File Explorer ──────────────────────────────────────────────────
+  setExplorerPath: (path: string | null) => void
+  setExplorerNodes: (path: string, nodes: DirectoryNode[]) => void
+  setExplorerLoading: (loading: boolean) => void
+  setExplorerError: (error: string | null) => void
+  pushBreadcrumb: (path: string) => void
+  popBreadcrumb: () => void
+  clearExplorer: () => void
+  setFilePanel: (fp: FileContent | null) => void
+  setFilePanelLoading: (loading: boolean) => void
+  setCommandBarVisible: (visible: boolean) => void
+
   reset: () => void
 }
 
@@ -104,6 +127,15 @@ export const useServerStore = create<ServerStore>((set) => ({
   serverInfo: null,
   alertLog: [],
   processPanelVisible: false,
+
+  explorerPath: null,
+  explorerNodes: [],
+  explorerBreadcrumbs: [],
+  explorerLoading: false,
+  explorerError: null,
+  filePanel: null,
+  filePanelLoading: false,
+  commandBarVisible: false,
 
   setStatus: (status) => set({ status }),
   setHostname: (hostname) => set({ hostname }),
@@ -138,6 +170,45 @@ export const useServerStore = create<ServerStore>((set) => ({
   addAlert: (a) => set((s) => ({ alertLog: [...s.alertLog.slice(-19), a] })),
   removeAlert: (id) => set((s) => ({ alertLog: s.alertLog.filter(a => a.id !== id) })),
   toggleProcessPanel: () => set((s) => ({ processPanelVisible: !s.processPanelVisible })),
+
+  setExplorerPath: (explorerPath) => set({ explorerPath, explorerError: null }),
+  setExplorerNodes: (path, nodes) =>
+    set((s) => ({
+      explorerPath: path,
+      explorerNodes: nodes,
+      explorerLoading: false,
+      explorerError: null,
+      explorerBreadcrumbs: s.explorerBreadcrumbs.includes(path)
+        ? s.explorerBreadcrumbs
+        : [...s.explorerBreadcrumbs, path],
+    })),
+  setExplorerLoading: (explorerLoading) => set({ explorerLoading }),
+  setExplorerError: (explorerError) => set({ explorerError, explorerLoading: false }),
+  pushBreadcrumb: (path) =>
+    set((s) => ({
+      explorerBreadcrumbs: s.explorerBreadcrumbs.includes(path)
+        ? s.explorerBreadcrumbs
+        : [...s.explorerBreadcrumbs, path],
+    })),
+  popBreadcrumb: () =>
+    set((s) => {
+      const crumbs = s.explorerBreadcrumbs.slice(0, -1)
+      return { explorerBreadcrumbs: crumbs, explorerPath: crumbs[crumbs.length - 1] ?? null }
+    }),
+  clearExplorer: () =>
+    set({
+      explorerPath: null,
+      explorerNodes: [],
+      explorerBreadcrumbs: [],
+      explorerLoading: false,
+      explorerError: null,
+      filePanel: null,
+      commandBarVisible: false,
+    }),
+  setFilePanel: (filePanel) => set({ filePanel, filePanelLoading: false }),
+  setFilePanelLoading: (filePanelLoading) => set({ filePanelLoading }),
+  setCommandBarVisible: (commandBarVisible) => set({ commandBarVisible }),
+
   reset: () =>
     set({
       status: 'idle',
@@ -154,6 +225,13 @@ export const useServerStore = create<ServerStore>((set) => ({
       processes: [],
       serverInfo: null,
       processPanelVisible: false,
+      explorerPath: null,
+      explorerNodes: [],
+      explorerBreadcrumbs: [],
+      explorerLoading: false,
+      explorerError: null,
+      filePanel: null,
+      commandBarVisible: false,
       // keep: lastConfig (reconnect), diskSidebarVisible, savedConnections, alertLog
     }),
 }))

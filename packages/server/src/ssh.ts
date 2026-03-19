@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { Client } from 'ssh2'
-import { ConnectionConfig, ServerMetrics, ProcessEntry, ServerInfo } from '@servercity/shared'
-import { buildMetrics, parseDirUsage, parseProcessList, parseServerInfo } from './metrics'
+import { ConnectionConfig, ServerMetrics, ProcessEntry, ServerInfo, DirectoryNode, FileContent } from '@servercity/shared'
+import { buildMetrics, parseDirUsage, parseProcessList, parseServerInfo, parseExploreResult, parseFileContent } from './metrics'
 import { friendlySSHError } from './errorMessages'
 import { SubdirEntry } from '@servercity/shared'
 
@@ -20,11 +20,14 @@ const METRICS_CMD = [
   'cat /proc/net/dev',
 ].join(' && ')
 
+const EXPLORE_CACHE_TTL = 30_000 // 30 seconds
+
 export class SSHSession {
   private client: Client
   private pollTimer: NodeJS.Timeout | null = null
   private lastMetrics: ServerMetrics | null = null
   private alive = false
+  private readonly exploreCache = new Map<string, { nodes: DirectoryNode[]; timestamp: number }>()
 
   constructor(
     private config: ConnectionConfig,
@@ -180,6 +183,74 @@ export class SSHSession {
     const cmd = `uname -r && uname -s && uptime -p 2>/dev/null || uptime`
     this.execCommand(cmd, (err, output) => {
       cb(err ? { kernel: '', os: 'Linux', uptime: '' } : parseServerInfo(output))
+    })
+  }
+
+  /** Explore a directory path: returns DirectoryNode[] or an error string. */
+  exploreDirectory(
+    path: string,
+    cb: (result: { nodes?: DirectoryNode[]; error?: string }) => void,
+  ) {
+    if (!this.alive) { cb({ error: 'not_found' }); return }
+
+    const cached = this.exploreCache.get(path)
+    if (cached && Date.now() - cached.timestamp < EXPLORE_CACHE_TTL) {
+      cb({ nodes: cached.nodes })
+      return
+    }
+
+    // Single-quoted path is safe — upstream validation blocks everything except [a-zA-Z0-9._-/]
+    const SEP = '---SEP---'
+    const cmd = [
+      `if [ ! -e '${path}' ]; then echo "ERROR:not_found"`,
+      `elif [ ! -r '${path}' ]; then echo "ERROR:permission_denied"`,
+      `elif [ ! -d '${path}' ]; then echo "ERROR:is_file"`,
+      `else du -k --max-depth=1 '${path}' 2>/dev/null | sort -rn | head -33`,
+      `printf '\\n${SEP}\\n'`,
+      `find '${path}' -maxdepth 1 ! -name '.' -printf "%f\\t%y\\t%T@\\n" 2>/dev/null | head -50`,
+      `fi`,
+    ].join('; ')
+
+    this.execCommand(cmd, (err, output) => {
+      if (err) { cb({ error: 'not_found' }); return }
+      const trimmed = output.trim()
+      if (trimmed.startsWith('ERROR:')) {
+        cb({ error: trimmed.slice(6) })
+        return
+      }
+      const parts = trimmed.split(SEP)
+      const nodes = parseExploreResult(parts[0] ?? '', parts[1] ?? '')
+      this.exploreCache.set(path, { nodes, timestamp: Date.now() })
+      cb({ nodes })
+    })
+  }
+
+  /** Fetch file metadata + tail content for a path. */
+  getFileContent(
+    path: string,
+    cb: (result: { content?: FileContent; error?: string }) => void,
+  ) {
+    if (!this.alive) { cb({ error: 'not_found' }); return }
+
+    const SEP = '---SEP---'
+    const cmd = [
+      `if [ ! -e '${path}' ]; then echo "ERROR:not_found"`,
+      `elif [ ! -r '${path}' ]; then echo "ERROR:permission_denied"`,
+      `elif [ -d '${path}' ]; then echo "ERROR:is_dir"`,
+      `else stat -c '%s %Y' '${path}' 2>/dev/null`,
+      `printf '\\n${SEP}\\n'`,
+      `tail -c 32768 '${path}' 2>/dev/null | head -120`,
+      `fi`,
+    ].join('; ')
+
+    this.execCommand(cmd, (err, output) => {
+      if (err) { cb({ error: 'not_found' }); return }
+      const trimmed = output.trim()
+      if (trimmed.startsWith('ERROR:')) {
+        cb({ error: trimmed.slice(6) })
+        return
+      }
+      cb({ content: parseFileContent(output, path) })
     })
   }
 

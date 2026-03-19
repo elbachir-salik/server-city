@@ -143,6 +143,38 @@ export function handleWSConnection(ws: WebSocket) {
         send({ type: 'server_info', payload: info })
       })
     }
+
+    if (msg.type === 'explore_path') {
+      if (!session) {
+        send({ type: 'error', payload: { message: 'Not connected to a server.' } })
+        return
+      }
+      const { path } = msg.payload
+      session.exploreDirectory(path, (result) => {
+        if (result.error) {
+          const err = result.error as 'not_found' | 'permission_denied' | 'is_file'
+          send({ type: 'explore_error', payload: { path, error: err } })
+        } else {
+          send({ type: 'explore_result', payload: { path, nodes: result.nodes ?? [] } })
+        }
+      })
+    }
+
+    if (msg.type === 'request_file_content') {
+      if (!session) {
+        send({ type: 'error', payload: { message: 'Not connected to a server.' } })
+        return
+      }
+      const { path } = msg.payload
+      session.getFileContent(path, (result) => {
+        if (result.error) {
+          const err = result.error as 'not_found' | 'permission_denied' | 'is_dir'
+          send({ type: 'file_content_error', payload: { path, error: err } })
+        } else if (result.content) {
+          send({ type: 'file_content_result', payload: result.content })
+        }
+      })
+    }
   })
 
   ws.on('close', () => {
