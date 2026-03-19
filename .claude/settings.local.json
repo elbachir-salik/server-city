@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(\"c:\\\\Users\\\\u482093\\\\Downloads\\\\banking-mcp-server\\\\servercity\\\\packages\\\\client\\\\src\\\\main.tsx\":*)"
-    ]
-  }
-}
