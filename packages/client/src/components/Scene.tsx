@@ -9,7 +9,6 @@ import { SceneLights } from '../scene/SceneLights'
 import { Skyline } from '../scene/Skyline'
 import { AmbientParticles } from '../scene/AmbientParticles'
 import { FloorExplorer } from '../scene/FloorExplorer'
-import { DockerWing } from '../scene/DockerWing'
 import { DockerContainer } from '@servercity/shared'
 
 interface SceneProps {
@@ -21,11 +20,10 @@ interface SceneProps {
   onSelectContainer: (c: DockerContainer) => void
 }
 
-export function Scene({ metrics, connected, isConnecting = false, onExplorePath, onRequestFileContent, onSelectContainer }: SceneProps) {
+export function Scene({ metrics, connected, isConnecting = false, onExplorePath, onRequestFileContent, onSelectContainer: _onSelectContainer }: SceneProps) {
   const cpuPercent    = metrics?.cpu.overall ?? 0
   const memPercent    = metrics?.memory.usedPercent ?? 0
   const selectedFloor = useServerStore(s => s.selectedFloor)
-  const dockerView    = useServerStore(s => s.dockerView)
 
   return (
     <Canvas camera={{ position: [10, 9, 13], fov: 45 }} gl={{ antialias: true }} shadows>
@@ -45,7 +43,6 @@ export function Scene({ metrics, connected, isConnecting = false, onExplorePath,
             onExplorePath={onExplorePath}
             onRequestFileContent={onRequestFileContent}
           />
-          {dockerView === '3d' && <DockerWing onSelectContainer={onSelectContainer} />}
         </>
       ) : (
         <IdleBuilding connecting={isConnecting} />
