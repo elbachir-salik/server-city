@@ -10,11 +10,13 @@ import { HttpWarningBanner } from './components/HttpWarningBanner'
 import { FloorDetailPanel } from './components/FloorDetailPanel'
 import { AlertToast } from './components/AlertToast'
 import { ProcessPanel } from './components/ProcessPanel'
+import { CommandBar } from './components/CommandBar'
+import { FilePanel } from './components/FilePanel'
 import { ConnectionConfig } from '@servercity/shared'
 
 export default function App() {
-  const { status, metrics, errorMessage, reset, fingerprintChallenge } = useServerStore()
-  const { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs } = useWebSocket()
+  const { status, metrics, errorMessage, reset, fingerprintChallenge, setCommandBarVisible } = useServerStore()
+  const { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs, explorePath, requestFileContent } = useWebSocket()
   useKeyboardShortcuts()
   useAlerts(metrics)
 
@@ -65,14 +67,26 @@ export default function App() {
         className="absolute inset-0 transition-opacity duration-700"
         style={{ opacity: showScene ? 1 : 0, pointerEvents: showScene ? 'auto' : 'none' }}
       >
-        <Scene metrics={metrics} connected={isConnected} isConnecting={isConnecting} />
+        <Scene
+          metrics={metrics}
+          connected={isConnected}
+          isConnecting={isConnecting}
+          onExplorePath={explorePath}
+          onRequestFileContent={requestFileContent}
+        />
 
         {showHUD && (
           <>
-            <HUD onDisconnect={handleDisconnect} onReconnect={handleReconnect} />
+            <HUD
+              onDisconnect={handleDisconnect}
+              onReconnect={handleReconnect}
+              onOpenExplorer={() => setCommandBarVisible(true)}
+            />
             <FloorDetailPanel floorData={floorData} onRequestSubdirs={requestSubdirs} />
             <ProcessPanel onRequestPs={requestPs} />
             <AlertToast />
+            <CommandBar onExplorePath={explorePath} />
+            <FilePanel />
           </>
         )}
       </div>

@@ -8,14 +8,17 @@ import { CameraRig } from '../scene/CameraRig'
 import { SceneLights } from '../scene/SceneLights'
 import { Skyline } from '../scene/Skyline'
 import { AmbientParticles } from '../scene/AmbientParticles'
+import { FloorExplorer } from '../scene/FloorExplorer'
 
 interface SceneProps {
   metrics: ServerMetrics | null
   connected: boolean
   isConnecting?: boolean
+  onExplorePath: (path: string) => void
+  onRequestFileContent: (path: string) => void
 }
 
-export function Scene({ metrics, connected, isConnecting = false }: SceneProps) {
+export function Scene({ metrics, connected, isConnecting = false, onExplorePath, onRequestFileContent }: SceneProps) {
   const cpuPercent    = metrics?.cpu.overall ?? 0
   const memPercent    = metrics?.memory.usedPercent ?? 0
   const selectedFloor = useServerStore(s => s.selectedFloor)
@@ -34,6 +37,10 @@ export function Scene({ metrics, connected, isConnecting = false }: SceneProps) 
         <>
           <Building metrics={metrics} connected={connected} />
           <AmbientParticles />
+          <FloorExplorer
+            onExplorePath={onExplorePath}
+            onRequestFileContent={onRequestFileContent}
+          />
         </>
       ) : (
         <IdleBuilding connecting={isConnecting} />

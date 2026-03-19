@@ -16,7 +16,16 @@ export function useKeyboardShortcuts() {
           store.resetCamera()
           break
         case 'Escape':
-          store.setSelectedFloor(null)
+          if (store.commandBarVisible) {
+            store.clearExplorer()
+            store.setCommandBarVisible(false)
+          } else {
+            store.setSelectedFloor(null)
+          }
+          break
+        case 'f':
+        case 'F':
+          if (store.status === 'connected') store.setCommandBarVisible(!store.commandBarVisible)
           break
         case 'd':
         case 'D':

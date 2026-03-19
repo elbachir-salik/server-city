@@ -7,6 +7,7 @@ import { useMetricHistory } from '../hooks/useMetricHistory'
 interface Props {
   onDisconnect: () => void
   onReconnect: () => void
+  onOpenExplorer?: () => void
 }
 
 function formatBytes(bytes: number): string {
@@ -153,7 +154,7 @@ function IconBtn({ onClick, title, active, children }: { onClick: () => void; ti
 }
 
 // ── Main HUD ─────────────────────────────────────────────────────────────────
-export function HUD({ onDisconnect, onReconnect }: Props) {
+export function HUD({ onDisconnect, onReconnect, onOpenExplorer }: Props) {
   const {
     status, hostname, metrics: rawMetrics, metricsStale, retryAttempt, retryCountdown,
     resetCamera, serverInfo, processPanelVisible, toggleProcessPanel,
@@ -229,6 +230,9 @@ export function HUD({ onDisconnect, onReconnect }: Props) {
           <>
             <IconBtn onClick={resetCamera} title="Reset camera (R)">⟳</IconBtn>
             <IconBtn onClick={toggleProcessPanel} title="Process panel (P)" active={processPanelVisible}>⚙</IconBtn>
+            {onOpenExplorer && (
+              <IconBtn onClick={onOpenExplorer} title="File explorer (F)">⌕</IconBtn>
+            )}
             <button
               onClick={onDisconnect}
               style={{
