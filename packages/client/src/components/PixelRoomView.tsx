@@ -287,7 +287,7 @@ function VolumeCloset({ volume }: { volume: DockerVolume }) {
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      title={`${volume.name} · ${volume.driver}`}
+      title={`${volume.name} · ${volume.mountpoint}`}
       style={{
         width: 88,
         height: 64,
@@ -474,8 +474,8 @@ export function PixelRoomView({ dockerInfo, onSelectContainer, selectedId }: Pix
     return { networkGroups: groups, uncategorized: uncat }
   }, [filtered, dockerInfo.networks])
 
-  const getNetwork = (name: string) =>
-    dockerInfo.networks.find(n => n.name === name) ?? { name, driver: 'bridge', id: '' }
+  const getNetwork = (name: string): DockerNetwork =>
+    dockerInfo.networks.find(n => n.name === name) ?? { name, driver: 'bridge', containers: [] }
 
   return (
     <div style={{ padding: '20px 24px 40px', minHeight: '100%' }}>

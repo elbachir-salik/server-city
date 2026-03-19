@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useRef, useCallback } from 'react'
 import { WSMessage, WSClientMessage, ConnectionConfig } from '@servercity/shared'
 import { useServerStore } from '../store/useServerStore'
 
@@ -9,15 +9,22 @@ const WS_URL =
 const MAX_RETRIES = 3
 const RETRY_BASE_MS = 1500 // 1.5s, 3s, 6s
 
+// Module-level singletons — shared across all consumers regardless of which
+// component/route calls useWebSocket(). This ensures the connection survives
+// React Router navigations between / and /docker.
+const _ws = { current: null as WebSocket | null }
+const _credentials = { current: null as ConnectionConfig | null }
+const _intentional = { current: false }
+const _retryCount = { current: 0 }
+
 export function useWebSocket() {
-  const wsRef = useRef<WebSocket | null>(null)
+  const wsRef = _ws
+  const credentialsRef = _credentials
+  const intentionalRef = _intentional
+  const retryCountRef = _retryCount
   const staleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const retryCountRef = useRef(0)
-  const intentionalRef = useRef(false) // true when user explicitly disconnects
-  // Full credentials kept in memory only — never written to Zustand or localStorage
-  const credentialsRef = useRef<ConnectionConfig | null>(null)
 
   const {
     setStatus, setHostname, setMetrics, setMetricsStale,
@@ -245,8 +252,6 @@ export function useWebSocket() {
       useServerStore.getState().setFilePanelLoading(true)
     }
   }, [])
-
-  useEffect(() => () => disconnect(), [disconnect])
 
   return { connect, reconnect, disconnect, sendFingerprintResponse, requestSubdirs, requestPs, explorePath, requestFileContent, requestDocker, requestContainerLogs, stopContainerLogs }
 }
